@@ -118,16 +118,14 @@
 
 
 (defn handle-client [#^Socket client]
-  (try
+  (print-exceptions
    (with-open [#^BufferedReader in (reader (.getInputStream client))
                #^PrintWriter out (writer (.getOutputStream client))]
      (.println out "Exit with 'done'")
      (.flush out)
      (doseq [s (take-while #(not= % "done") (line-seq in))]
-       (add-datapoint (parse-datapoint s))))
-   (catch Exception e
-     (.println System/err e)))
-   (.close client))
+       (add-datapoint (parse-datapoint s)))))
+  (.close client))
 
 
 
@@ -136,11 +134,9 @@
   (with-open [server (ServerSocket. *server-port*)]
     (println "Listening on :6666")
     (while true
-      (try
+      (print-exceptions
        (let [client (.accept server)]
-         (.start (Thread. #(handle-client client))))
-       (catch Exception e
-         (.println System/err e))))))
+         (.start (Thread. #(handle-client client))))))))
 
 
 (defn run-plotter []
