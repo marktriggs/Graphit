@@ -17,19 +17,17 @@
 
 
 
+;; Config bits
 (def *default-options*  {:max-to-keep 120
                          :port 6666})
+(def *redraw-delay-ms* 2000)
 
 
+;; Thread-shared vars
 (def *server-port* nil)
-
-(def *redraw-delay-ms* 1000)
-
 (def *data-gatherer* (agent []))
-
 (def *max-readings* nil)
 (def *graphs* (atom {}))
-
 (def *frame* (JFrame.))
 (def *status-bar* (JLabel.))
 (def *panel* (JPanel.))
