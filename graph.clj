@@ -1,4 +1,3 @@
-;; jarit graph.clj graphit.jar ~/.clojure/jfreechart-1.0.13.jar ~/.clojure/jcommon-1.0.16.jar  /usr/local/lib/clojure-contrib.jar
 (ns graph
   (:import (org.jfree.chart ChartPanel JFreeChart ChartFactory)
            (org.jfree.data.xy XYSeries XYSeriesCollection)
@@ -7,11 +6,12 @@
            (org.jfree.ui ApplicationFrame)
            (java.io BufferedReader PrintWriter)
            (java.text NumberFormat)
-           (javax.swing JFrame JPanel BoxLayout)
+           (javax.swing JFrame JPanel BoxLayout JLabel)
            (java.net ServerSocket Socket)
            (java.awt BasicStroke Dimension Color))
   (:use clojure.contrib.str-utils
-        clojure.contrib.duck-streams)
+        clojure.contrib.duck-streams
+        swank)
   (:gen-class :name GraphIt
               :main true))
 
@@ -25,6 +25,7 @@
 (def *graphs* (atom {}))
 
 (def *frame* (JFrame.))
+(def *status-bar* (JLabel.))
 (def *panel* (JPanel.))
 
 
@@ -84,8 +85,11 @@
 
 (defn do-plot [values]
   (print-exceptions
-   (println "Queue size:" (count values))
+
+   (.setText *status-bar* (str "Queue size: " (count values)))
+
    (doseq [{:keys [graph time line value]} values]
+
      (when-not (@*graphs* graph)
        (let [dataset (XYSeriesCollection.)
              chart (make-chart graph "" dataset)]
@@ -95,6 +99,7 @@
                 {:chart chart
                  :dataset dataset
                  :lines {}})))
+
      (when-not (get-in @*graphs* [graph :lines line])
        (let [new-line (doto (XYSeries. line)
                         (.setMaximumItemCount @*max-readings*))]
@@ -104,6 +109,7 @@
 
          (.addSeries (get-in @*graphs* [graph :dataset])
                      new-line)))
+
      (.add #^XYSeries (get-in @*graphs* [graph :lines line])
            #^Number time #^Number value false))
 
@@ -140,7 +146,13 @@
 
 
 (defn run-plotter []
-  (.setLayout *panel* (BoxLayout. *panel* BoxLayout/PAGE_AXIS))
+  (doto *status-bar*
+    (.setHorizontalAlignment JLabel/LEFT))
+
+  (doto *panel*
+    (.setLayout (BoxLayout. *panel* BoxLayout/PAGE_AXIS))
+    (.add *status-bar*))
+
   (doto *frame*
     (.setDefaultCloseOperation JFrame/EXIT_ON_CLOSE)
     (.add *panel*)
@@ -153,6 +165,8 @@
     (reset! *max-readings* (Integer. max-to-keep))
     (.start (Thread. handle-inputs))
     (send-off *data-gatherer* do-plot)
+    (binding [*3 nil *2 nil *1 nil *e nil]
+      (swank/start-server "/dev/null" :port 5005))
     (run-plotter)))
 
 
