@@ -16,12 +16,18 @@
               :main true))
 
 
-(def *server-port* 6666)
+
+(def *default-options*  {:max-to-keep 120
+                         :port 6666})
+
+
+(def *server-port* nil)
+
 (def *redraw-delay-ms* 1000)
 
 (def *data-gatherer* (agent []))
 
-(def *max-readings* (atom Integer/MAX_VALUE))
+(def *max-readings* nil)
 (def *graphs* (atom {}))
 
 (def *frame* (JFrame.))
@@ -102,7 +108,7 @@
 
      (when-not (get-in @*graphs* [graph :lines line])
        (let [new-line (doto (XYSeries. line)
-                        (.setMaximumItemCount @*max-readings*))]
+                        (.setMaximumItemCount *max-readings*))]
          (swap! *graphs* update-in
                 [graph :lines]
                 assoc line new-line)
@@ -138,7 +144,7 @@
 (defn handle-inputs []
   "Open a socket and read lines of input."
   (with-open [server (ServerSocket. *server-port*)]
-    (println "Listening on :6666")
+    (println "Listening on" *server-port*)
     (while true
       (print-exceptions
        (let [client (.accept server)]
@@ -160,9 +166,12 @@
     (.setVisible true)))
 
 
-(defn run [max-to-keep & _]
+(defn run [{:keys [max-to-keep port]}]
   (let [data-handler (agent nil)]
-    (reset! *max-readings* (Integer. max-to-keep))
+
+    (alter-var-root #'*server-port* (fn [_] (Integer. port)))
+    (alter-var-root #'*max-readings* (fn [_] (Integer. max-to-keep)))
+
     (.start (Thread. handle-inputs))
     (send-off *data-gatherer* do-plot)
     (binding [*3 nil *2 nil *1 nil *e nil]
@@ -171,7 +180,9 @@
 
 
 (defn -main [& args]
-  (if (and (not= (count args) 0)
-           (not= (count args) 1))
-    (println "Usage: <me> max-to-keep")
-    (apply run `[~@args ~Integer/MAX_VALUE])))
+  (if (not (<= 0 (count args) 2))
+    (println "Usage: <me> [max-to-keep] [port]")
+    (run
+     (merge
+      *default-options*
+      (zipmap [:max-to-keep :port] args)))))
