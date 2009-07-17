@@ -17,8 +17,8 @@
 
 
 (def *server-port* 6666)
-
 (def *redraw-delay-ms* 1000)
+
 (def *data-gatherer* (agent []))
 
 (def *max-readings* (atom Integer/MAX_VALUE))
@@ -150,9 +150,8 @@
 
 (defn run [max-to-keep & _]
   (let [data-handler (agent nil)]
-    (dosync
-     (reset! *max-readings* (Integer. max-to-keep))
-     (.start (Thread. handle-inputs)))
+    (reset! *max-readings* (Integer. max-to-keep))
+    (.start (Thread. handle-inputs))
     (send-off *data-gatherer* do-plot)
     (run-plotter)))
 
