@@ -22,6 +22,7 @@
 (def *default-options*  {:max-to-keep 120
                          :swank-port 5005
                          :port 6666})
+
 (def *redraw-delay-ms* 2000)
 
 
@@ -54,7 +55,6 @@
 
 
 (defn add-datapoint [point]
-  "Add a new data point to our series, creating a new line as required."
   (send *data-gatherer* conj point))
 
 
@@ -155,7 +155,6 @@
 
 
 (defn run-plotter []
-
   (doto *refresh-rate*
     (.addActionListener (proxy [ActionListener] []
                           (actionPerformed [e]
