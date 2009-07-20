@@ -170,7 +170,8 @@
     (.setLayout (doto (FlowLayout.)
                   (.setAlignment FlowLayout/LEFT)))
     (.add (JLabel. "Redraw rate:"))
-    (.add *refresh-rate*))
+    (.add *refresh-rate*)
+    (.add (JLabel. "ms")))
 
   (doto *panel*
     (.setLayout (BoxLayout. *panel* BoxLayout/PAGE_AXIS)))
