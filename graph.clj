@@ -6,9 +6,10 @@
            (org.jfree.ui ApplicationFrame)
            (java.io BufferedReader PrintWriter)
            (java.text NumberFormat)
-           (javax.swing JFrame JPanel BoxLayout JLabel)
+           (javax.swing JFrame JPanel JTextField BoxLayout JLabel)
            (java.net ServerSocket Socket)
-           (java.awt BasicStroke Dimension Color))
+           (java.awt.event ActionListener)
+           (java.awt BasicStroke Dimension Color BorderLayout FlowLayout))
   (:use clojure.contrib.str-utils
         clojure.contrib.duck-streams
         swank)
@@ -19,6 +20,7 @@
 
 ;; Config bits
 (def *default-options*  {:max-to-keep 120
+                         :swank-port 5005
                          :port 6666})
 (def *redraw-delay-ms* 2000)
 
@@ -29,8 +31,13 @@
 (def *max-readings* nil)
 (def *graphs* (atom {}))
 (def *frame* (JFrame.))
-(def *status-bar* (JLabel.))
+(def *status-bar* (JPanel.))
+(def *refresh-rate* (JTextField.))
 (def *panel* (JPanel.))
+
+
+(defn set-refresh-rate [n]
+  (alter-var-root #'*redraw-delay-ms* (fn [_] n)))
 
 
 (defn parse-datapoint [#^String s]
@@ -90,8 +97,6 @@
 (defn do-plot [values]
   (print-exceptions
 
-   (.setText *status-bar* (str "Queue size: " (count values)))
-
    (doseq [{:keys [graph time line value]} values]
 
      (when-not (@*graphs* graph)
@@ -150,21 +155,38 @@
 
 
 (defn run-plotter []
+
+  (doto *refresh-rate*
+    (.addActionListener (proxy [ActionListener] []
+                          (actionPerformed [e]
+                            (try (set-refresh-rate
+                                  (Integer. (.getActionCommand e)))
+                                 (catch Exception _)))))
+    (.setColumns 6)
+    (.setText (str *redraw-delay-ms*)))
+
   (doto *status-bar*
-    (.setHorizontalAlignment JLabel/LEFT))
+    (.setPreferredSize (Dimension. 10 23))
+    (.setLayout (doto (FlowLayout.)
+                  (.setAlignment FlowLayout/LEFT)))
+    (.add (JLabel. "Redraw rate:"))
+    (.add *refresh-rate*))
 
   (doto *panel*
-    (.setLayout (BoxLayout. *panel* BoxLayout/PAGE_AXIS))
-    (.add *status-bar*))
+    (.setLayout (BoxLayout. *panel* BoxLayout/PAGE_AXIS)))
+
+  (.setLayout (.getContentPane *frame*)
+              (BorderLayout.))
 
   (doto *frame*
     (.setDefaultCloseOperation JFrame/EXIT_ON_CLOSE)
+    (.add *status-bar* BorderLayout/NORTH)
     (.add *panel*)
     (.setSize (Dimension. 1280 1024))
     (.setVisible true)))
 
 
-(defn run [{:keys [max-to-keep port]}]
+(defn run [{:keys [max-to-keep port swank-port]}]
   (let [data-handler (agent nil)]
 
     (alter-var-root #'*server-port* (fn [_] (Integer. port)))
@@ -173,14 +195,14 @@
     (.start (Thread. handle-inputs))
     (send-off *data-gatherer* do-plot)
     (binding [*3 nil *2 nil *1 nil *e nil]
-      (swank/start-server "/dev/null" :port 5005))
+      (swank/start-server "/dev/null" :port (Integer. swank-port)))
     (run-plotter)))
 
 
 (defn -main [& args]
-  (if (not (<= 0 (count args) 2))
-    (println "Usage: <me> [max-to-keep] [port]")
+  (if (not (<= 0 (count args) 3))
+    (println "Usage: <me> [max-to-keep] [port] [swank-port]")
     (run
      (merge
       *default-options*
-      (zipmap [:max-to-keep :port] args)))))
+      (zipmap [:max-to-keep :port :swank-port] args)))))
