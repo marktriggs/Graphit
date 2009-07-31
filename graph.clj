@@ -5,7 +5,8 @@
            (org.jfree.chart.axis NumberAxis)
            (org.jfree.ui ApplicationFrame)
            (java.io BufferedReader PrintWriter)
-           (java.text NumberFormat)
+           (java.text NumberFormat DecimalFormat SimpleDateFormat)
+           (java.util Date)
            (javax.swing JFrame JPanel JTextField BoxLayout JLabel)
            (java.net ServerSocket Socket)
            (java.awt.event ActionListener)
@@ -87,7 +88,15 @@
         (.setOutlineStroke (BasicStroke. 3.0))
         (.setDrawOutlines true))
       (doto (.getRangeAxis xyplot)
-        (.setStandardTickUnits (NumberAxis/createIntegerTickUnits))))
+        (.setStandardTickUnits (NumberAxis/createIntegerTickUnits)))
+      (doto (.getDomainAxis xyplot)
+        (.setNumberFormatOverride
+         (proxy [DecimalFormat] []
+           (format [a b c]
+             (let [formatter (SimpleDateFormat. "HH:mm:ss, yyyy-MM-dd")]
+               (if (>= a (.getTime (.parse formatter "00:00:00, 1990-1-1")))
+                 (.append b (.format formatter (Date. (long a))))
+                 (proxy-super format a b c))))))))
 
     (doto (ChartPanel. linechart)
       (.setMouseWheelEnabled true)
