@@ -209,7 +209,9 @@
 
 
 (defn -main [& args]
-  (if (not (<= 0 (count args) 3))
+  (if (or (not (<= 0 (count args) 3))
+	  ((set args) "-h")
+	  ((set args) "--help"))
     (println "Usage: <me> [max-to-keep] [port] [swank-port]")
     (run
      (merge
