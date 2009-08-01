@@ -3,6 +3,7 @@
            (org.jfree.data.xy XYSeries XYSeriesCollection)
            (org.jfree.chart.plot PlotOrientation)
            (org.jfree.chart.axis NumberAxis)
+           (org.jfree.chart.labels XYToolTipGenerator)
            (org.jfree.ui ApplicationFrame)
            (java.io BufferedReader PrintWriter)
            (java.text NumberFormat DecimalFormat SimpleDateFormat)
@@ -16,7 +17,6 @@
         swank)
   (:gen-class :name GraphIt
               :main true))
-
 
 
 ;; Config bits
@@ -64,6 +64,24 @@
         (catch Exception e# (.printStackTrace e#))))
 
 
+(def *number-formatter* (proxy [DecimalFormat] []
+                          (format [a b c]
+                            (let [formatter (SimpleDateFormat. "yyyy-MM-dd HH:mm:ss")]
+                              (if (>= a (.getTime (.parse formatter "1990-1-1 00:00:00")))
+                                (.append b (.format formatter (Date. (long a))))
+                                (proxy-super format a b c))))))
+
+
+(def *tooltip-generator*
+     (proxy [XYToolTipGenerator] []
+       (generateToolTip [dataset series item]
+         (format "%s, %s"
+                 (.format *number-formatter* 
+                          (.getXValue dataset series item))
+                 (String/valueOf (.getYValue dataset series item))))))
+
+
+
 (defn make-chart [title y-axis dataset]
   (let [linechart (ChartFactory/createXYLineChart title
                                                   "Time"
@@ -82,21 +100,17 @@
         (.setRangeZeroBaselineVisible true)
         (.setBackgroundPaint (Color. 239 239 239)))
       (doto (.getRenderer xyplot)
+        (.setBaseToolTipGenerator *tooltip-generator*)
         (.setStroke (BasicStroke. 2.0))
         (.setBaseShapesVisible true)
         (.setBaseShapesFilled true)
         (.setOutlineStroke (BasicStroke. 3.0))
         (.setDrawOutlines true))
       (doto (.getRangeAxis xyplot)
+        (.setAutoRangeIncludesZero false)
         (.setStandardTickUnits (NumberAxis/createIntegerTickUnits)))
       (doto (.getDomainAxis xyplot)
-        (.setNumberFormatOverride
-         (proxy [DecimalFormat] []
-           (format [a b c]
-             (let [formatter (SimpleDateFormat. "HH:mm:ss, yyyy-MM-dd")]
-               (if (>= a (.getTime (.parse formatter "00:00:00, 1990-1-1")))
-                 (.append b (.format formatter (Date. (long a))))
-                 (proxy-super format a b c))))))))
+        (.setNumberFormatOverride *number-formatter*)))
 
     (doto (ChartPanel. linechart)
       (.setMouseWheelEnabled true)
@@ -210,8 +224,8 @@
 
 (defn -main [& args]
   (if (or (not (<= 0 (count args) 3))
-	  ((set args) "-h")
-	  ((set args) "--help"))
+          ((set args) "-h")
+          ((set args) "--help"))
     (println "Usage: <me> [max-to-keep] [port] [swank-port]")
     (run
      (merge
