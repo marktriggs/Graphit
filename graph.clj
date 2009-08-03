@@ -161,6 +161,7 @@
   (print-exceptions
    (with-open [#^BufferedReader in (reader (.getInputStream client))
                #^PrintWriter out (writer (.getOutputStream client))]
+     (.println out "Syntax: graph name:xval:line name:yval")
      (.println out "Exit with 'done'")
      (.flush out)
      (doseq [s (take-while #(not= % "done") (line-seq in))]
