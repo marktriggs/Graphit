@@ -85,7 +85,7 @@
 
 (defn make-chart [title y-axis dataset]
   (let [linechart (ChartFactory/createXYLineChart title
-                                                  "Time"
+                                                  ""
                                                   y-axis
                                                   dataset
                                                   PlotOrientation/VERTICAL
