@@ -75,8 +75,9 @@
 (def *tooltip-generator*
      (proxy [XYToolTipGenerator] []
        (generateToolTip [dataset series item]
-         (format "%s, %s"
-                 (.format *number-formatter* 
+         (format "%s, %s, %s"
+                 (.getSeriesKey dataset series)
+                 (.format *number-formatter*
                           (.getXValue dataset series item))
                  (String/valueOf (.getYValue dataset series item))))))
 
