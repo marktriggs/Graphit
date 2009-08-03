@@ -114,6 +114,7 @@
         (.setNumberFormatOverride *number-formatter*)))
 
     (doto (ChartPanel. linechart)
+      (.setInitialDelay 200)
       (.setMouseWheelEnabled true)
       (.setPreferredSize (Dimension. 800 600)))))
 
