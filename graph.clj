@@ -5,12 +5,12 @@
            (org.jfree.chart.axis NumberAxis)
            (org.jfree.chart.labels XYToolTipGenerator)
            (org.jfree.ui ApplicationFrame)
-           (java.io BufferedReader PrintWriter)
+           (java.io BufferedReader PrintWriter File)
            (java.text NumberFormat DecimalFormat SimpleDateFormat)
            (java.util Date)
            (javax.swing JFrame JPanel JTextField BoxLayout JLabel)
            (java.net ServerSocket Socket)
-           (java.awt.event ActionListener)
+           (java.awt.event ActionListener WindowAdapter)
            (java.awt BasicStroke Dimension Color BorderLayout FlowLayout))
   (:use clojure.contrib.str-utils
         clojure.contrib.duck-streams
@@ -46,13 +46,12 @@
   (let [[graph & bits] (.split s ":")]
     (let [[time label num] (if (= (count bits) 2)
                              (concat [(System/currentTimeMillis)] bits)
-                             (cons (BigInteger. #^String (first bits))
+                             (cons (BigDecimal. #^String (first bits))
                                    (rest bits)))]
       {:graph graph
        :time time
        :line label
        :value (.parse (NumberFormat/getInstance) num)})))
-
 
 
 (defn add-datapoint [point]
@@ -70,6 +69,24 @@
                               (if (>= a (.getTime (.parse formatter "1990-1-1 00:00:00")))
                                 (.append b (.format formatter (Date. (long a))))
                                 (proxy-super format a b c))))))
+
+
+(defn dump-dataset [wrtr dataset graph-name]
+  (doseq [i (range 0 (.getSeriesCount dataset))]
+    (let [key (.getSeriesKey dataset i)
+          series (.getSeries dataset key)]
+      (doseq [data-item (.getItems series)]
+        (.println wrtr
+                  (format "%s:%f:%s:%f"
+                          graph-name
+                          (double (.getX data-item))
+                          key
+                          (double (.getY data-item))))))))
+
+(defn dump-state [filename]
+  (with-open [fh (writer filename)]
+    (doseq [[name graph] @*graphs*]
+      (dump-dataset fh (:dataset graph) name))))
 
 
 (def *tooltip-generator*
@@ -188,6 +205,9 @@
          (.start (Thread. #(handle-client client))))))))
 
 
+(defn save-state []
+  (dump-state (File. (System/getenv "HOME") ".graphit.state")))
+
 (defn run-plotter []
   (doto *refresh-rate*
     (.addActionListener (proxy [ActionListener] []
@@ -213,6 +233,9 @@
               (BorderLayout.))
 
   (doto *frame*
+    (.addWindowListener
+     (proxy [WindowAdapter] []
+       (windowClosed [e] (save-state))))
     (.setDefaultCloseOperation JFrame/EXIT_ON_CLOSE)
     (.add *status-bar* BorderLayout/NORTH)
     (.add *panel*)
@@ -222,6 +245,9 @@
 
 (defn run [{:keys [max-to-keep port swank-port]}]
   (let [data-handler (agent nil)]
+
+    (.addShutdownHook (Runtime/getRuntime)
+                      (Thread. #(save-state)))
 
     (alter-var-root #'*server-port* (fn [_] (Integer. port)))
     (alter-var-root #'*max-readings* (fn [_] (Integer. max-to-keep)))
