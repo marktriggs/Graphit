@@ -157,6 +157,14 @@
   [])
 
 
+(defn remove-graph [graphname]
+  "Removes 'graphname' from the display."
+  (let [chart (:chart (@*graphs* graphname))]
+    (.remove *panel* chart)
+    (.revalidate *panel*)
+    (swap! *graphs* dissoc graphname)))
+
+
 (defn handle-client [#^Socket client]
   (print-exceptions
    (with-open [#^BufferedReader in (reader (.getInputStream client))
