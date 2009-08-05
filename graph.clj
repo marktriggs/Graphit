@@ -174,12 +174,33 @@
   [])
 
 
-(defn remove-graph [graphname]
-  "Removes 'graphname' from the display."
+(defn hide-graph [graphname]
   (let [chart (:chart (@*graphs* graphname))]
     (.remove *panel* chart)
-    (.revalidate *panel*)
-    (swap! *graphs* dissoc graphname)))
+    (.revalidate *panel*)))
+
+
+(defn hide-all-graphs []
+  (doseq [graph (keys @*graphs*)]
+    (hide-graph graph)))
+
+
+(defn remove-graph [graphname]
+  "Removes 'graphname' from the display."
+  (hide-graph graphname)
+  (swap! *graphs* dissoc graphname))
+
+
+(defn show-graph [graphname]
+  (hide-graph graphname)
+  (let [chart (:chart (@*graphs* graphname))]
+    (.add *panel* chart)
+    (.revalidate *panel*)))
+
+
+(defn show-all-graphs []
+  (doseq [graph (keys @*graphs*)]
+    (show-graph graph)))
 
 
 (defn handle-client [#^Socket client]
