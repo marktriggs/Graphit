@@ -8,7 +8,8 @@
            (java.io BufferedReader PrintWriter File)
            (java.text NumberFormat DecimalFormat SimpleDateFormat)
            (java.util Date)
-           (javax.swing JFrame JPanel JTextField BoxLayout JLabel JMenuItem)
+           (javax.swing JFrame JPanel JTextField BoxLayout
+                        JLabel JMenuItem JOptionPane)
            (java.net ServerSocket Socket)
            (java.awt.event ActionListener WindowAdapter)
            (java.awt BasicStroke Dimension Color BorderLayout FlowLayout))
@@ -200,7 +201,11 @@
               (.setActionCommand "PROPERTIES")
               (.addActionListener (action-listener
                                    (fn [_]
-                                     (remove-graph name)))))))))
+                                     (when (= (JOptionPane/showConfirmDialog
+                                               *frame*
+                                               "Really delete?")
+                                              JOptionPane/YES_OPTION)
+                                       (remove-graph name))))))))))
 
 
 (defn do-plot [values]
