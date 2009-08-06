@@ -8,7 +8,7 @@
            (java.io BufferedReader PrintWriter File)
            (java.text NumberFormat DecimalFormat SimpleDateFormat)
            (java.util Date)
-           (javax.swing JFrame JPanel JTextField BoxLayout JLabel)
+           (javax.swing JFrame JPanel JTextField BoxLayout JLabel JMenuItem)
            (java.net ServerSocket Socket)
            (java.awt.event ActionListener WindowAdapter)
            (java.awt BasicStroke Dimension Color BorderLayout FlowLayout))
@@ -136,44 +136,6 @@
       (.setPreferredSize (Dimension. 800 600)))))
 
 
-(defn do-plot [values]
-  (print-exceptions
-
-   (doseq [{:keys [graph time line value]} values]
-
-     (when-not (@*graphs* graph)
-       (let [dataset (XYSeriesCollection.)
-             chart (make-chart graph "" dataset)]
-         (.add *panel* chart)
-         (.revalidate *panel*)
-         (swap! *graphs* assoc graph
-                {:chart chart
-                 :dataset dataset
-                 :lines {}})))
-
-     (when-not (get-in @*graphs* [graph :lines line])
-       (let [new-line (doto (XYSeries. line)
-                        (.setMaximumItemCount *max-readings*))]
-         (swap! *graphs* update-in
-                [graph :lines]
-                assoc line new-line)
-
-         (.addSeries (get-in @*graphs* [graph :dataset])
-                     new-line)))
-
-     (.add #^XYSeries (get-in @*graphs* [graph :lines line])
-           #^Number time #^Number value false))
-
-   (doseq [#^XYSeries line (for [graph (vals @*graphs*)
-                                 line (-> graph :lines vals)]
-                             line)]
-     (.fireSeriesChanged line))
-
-   (send-off *agent* do-plot)
-   (Thread/sleep *redraw-delay-ms*))
-  [])
-
-
 (defn hide-graph [graphname]
   (let [chart (:chart (@*graphs* graphname))]
     (.remove *panel* chart)
@@ -201,6 +163,78 @@
 (defn show-all-graphs []
   (doseq [graph (keys @*graphs*)]
     (show-graph graph)))
+
+
+(defn action-listener [fn]
+  (proxy [ActionListener] []
+    (actionPerformed [e] (fn e))))
+
+
+;; A terrible hack ;o)
+(defn instrument-popup-menu [name]
+  (let [chart (:chart (@*graphs* name))
+        field (.getDeclaredField (class chart) "popup")]
+    (.setAccessible field true)
+    (doto (.get field chart)
+      (.addSeparator)
+      (.add (doto (JMenuItem. "Show only this graph")
+              (.setActionCommand "PROPERTIES")
+              (.addActionListener (action-listener (fn [_]
+                                                     (hide-all-graphs)
+                                                     (show-graph name))))))
+      (.add (doto (JMenuItem. "Hide this graph")
+              (.setActionCommand "PROPERTIES")
+              (.addActionListener (action-listener (fn [_]
+                                                     (hide-graph name))))))
+      (.add (doto (JMenuItem. "Show all graphs")
+              (.setActionCommand "PROPERTIES")
+              (.addActionListener (action-listener (fn [_]
+                                                     (show-all-graphs))))))
+      (.addSeparator)
+      (.add (doto (JMenuItem. "Delete this graph")
+              (.setActionCommand "PROPERTIES")
+              (.addActionListener (action-listener
+                                   (fn [_]
+                                     (remove-graph name)))))))))
+
+
+(defn do-plot [values]
+  (print-exceptions
+
+   (doseq [{:keys [graph time line value]} values]
+
+     (when-not (@*graphs* graph)
+       (let [dataset (XYSeriesCollection.)
+             chart (make-chart graph "" dataset)]
+         (.add *panel* chart)
+         (.revalidate *panel*)
+         (swap! *graphs* assoc graph
+                {:chart chart
+                 :dataset dataset
+                 :lines {}})
+         (instrument-popup-menu graph)))
+
+     (when-not (get-in @*graphs* [graph :lines line])
+       (let [new-line (doto (XYSeries. line)
+                        (.setMaximumItemCount *max-readings*))]
+         (swap! *graphs* update-in
+                [graph :lines]
+                assoc line new-line)
+
+         (.addSeries (get-in @*graphs* [graph :dataset])
+                     new-line)))
+
+     (.add #^XYSeries (get-in @*graphs* [graph :lines line])
+           #^Number time #^Number value false))
+
+   (doseq [#^XYSeries line (for [graph (vals @*graphs*)
+                                 line (-> graph :lines vals)]
+                             line)]
+     (.fireSeriesChanged line))
+
+   (send-off *agent* do-plot)
+   (Thread/sleep *redraw-delay-ms*))
+  [])
 
 
 (defn handle-client [#^Socket client]
@@ -231,11 +265,10 @@
 
 (defn run-plotter []
   (doto *refresh-rate*
-    (.addActionListener (proxy [ActionListener] []
-                          (actionPerformed [e]
-                            (try (set-refresh-rate
-                                  (Integer. (.getActionCommand e)))
-                                 (catch Exception _)))))
+    (.addActionListener (action-listener
+                         #(try (set-refresh-rate
+                                (Integer. (.getActionCommand %)))
+                               (catch Exception _))))
     (.setColumns 6)
     (.setText (str *redraw-delay-ms*)))
 
