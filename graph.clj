@@ -319,8 +319,9 @@
 
     (.start (Thread. handle-inputs))
     (send-off *data-gatherer* do-plot)
-    (binding [*3 nil *2 nil *1 nil *e nil]
-      (swank/start-server "/dev/null" :port (Integer. swank-port)))
+    (when swank-port
+      (binding [*3 nil *2 nil *1 nil *e nil]
+        (swank/start-server "/dev/null" :port (Integer. swank-port))))
     (run-plotter)))
 
 
@@ -329,6 +330,6 @@
       "A handy graphing thingy"
       [[max-to-keep "Maximum points to keep per line" "120"]
        [port "Listen port" "6666"]
-       [swank-port "Swank listen port" "5005"]
+       [swank-port "Swank listen port"]
        [redraw "Redraw ms" "2000"]]
     (run max-to-keep port swank-port redraw)))
