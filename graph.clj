@@ -14,17 +14,14 @@
            (java.awt BasicStroke Dimension Color BorderLayout FlowLayout))
   (:use clojure.contrib.str-utils
         clojure.contrib.duck-streams
+        clojure.contrib.command-line
         swank)
   (:gen-class :name GraphIt
               :main true))
 
 
 ;; Config bits
-(def *default-options*  {:max-to-keep 120
-                         :swank-port 5005
-                         :port 6666})
-
-(def *redraw-delay-ms* 2000)
+(def *redraw-delay-ms* nil)
 
 
 ;; Thread-shared vars
@@ -297,12 +294,13 @@
     (.setVisible true)))
 
 
-(defn run [{:keys [max-to-keep port swank-port]}]
+(defn run [max-to-keep port swank-port redraw-ms]
   (let [data-handler (agent nil)]
 
     (.addShutdownHook (Runtime/getRuntime)
                       (Thread. #(save-state)))
 
+    (alter-var-root #'*redraw-delay-ms* (fn [_] (Integer. redraw-ms)))
     (alter-var-root #'*server-port* (fn [_] (Integer. port)))
     (alter-var-root #'*max-readings* (fn [_] (Integer. max-to-keep)))
 
@@ -314,11 +312,10 @@
 
 
 (defn -main [& args]
-  (if (or (not (<= 0 (count args) 3))
-          ((set args) "-h")
-          ((set args) "--help"))
-    (println "Usage: <me> [max-to-keep] [port] [swank-port]")
-    (run
-     (merge
-      *default-options*
-      (zipmap [:max-to-keep :port :swank-port] args)))))
+  (with-command-line args
+      "A handy graphing thingy"
+      [[max-to-keep "Maximum points to keep per line" "120"]
+       [port "Listen port" "6666"]
+       [swank-port "Swank listen port" "5005"]
+       [redraw "Redraw ms" "2000"]]
+    (run max-to-keep port swank-port redraw)))
