@@ -133,25 +133,24 @@
       (.setPreferredSize (Dimension. 800 600)))))
 
 
-(defn hide-graph [graphname]
-  (let [chart (:chart (@*graphs* graphname))]
-    (.remove *panel* chart)
-    (.revalidate *panel*)))
+(defn hide-graph
+  ([graphname] (hide-graph graphname false))
+  ([graphname force]
+     (when (or force (> (.countComponents *panel*) 1))
+       (let [chart (:chart (@*graphs* graphname))]
+         (.remove *panel* chart)
+         (.revalidate *panel*)))))
 
 
-(defn hide-all-graphs []
-  (doseq [graph (keys @*graphs*)]
-    (hide-graph graph)))
-
-
-(defn remove-graph [graphname]
-  "Removes 'graphname' from the display."
-  (hide-graph graphname)
-  (swap! *graphs* dissoc graphname))
+(defn hide-all-graphs
+  ([] (hide-all-graphs false))
+  ([force]
+     (doseq [graph (keys @*graphs*)]
+       (hide-graph graph force))))
 
 
 (defn show-graph [graphname]
-  (hide-graph graphname)
+  (hide-graph graphname true)
   (let [chart (:chart (@*graphs* graphname))]
     (.add *panel* chart)
     (.revalidate *panel*)))
@@ -160,6 +159,15 @@
 (defn show-all-graphs []
   (doseq [graph (keys @*graphs*)]
     (show-graph graph)))
+
+
+(defn remove-graph [graphname]
+  "Removes 'graphname' from the display."
+  (when (= (.countComponents *panel*) 1)
+    ;; show any other available graphs...
+    (show-all-graphs))
+  (hide-graph graphname)
+  (swap! *graphs* dissoc graphname))
 
 
 (defn action-listener [fn]
@@ -177,7 +185,7 @@
       (.add (doto (JMenuItem. "Show only this graph")
               (.setActionCommand "PROPERTIES")
               (.addActionListener (action-listener (fn [_]
-                                                     (hide-all-graphs)
+                                                     (hide-all-graphs true)
                                                      (show-graph name))))))
       (.add (doto (JMenuItem. "Hide this graph")
               (.setActionCommand "PROPERTIES")
