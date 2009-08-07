@@ -81,10 +81,12 @@
                           key
                           (double (.getY data-item))))))))
 
+
 (defn dump-state [filename]
   (with-open [fh (writer filename)]
     (doseq [[name graph] @*graphs*]
-      (dump-dataset fh (:dataset graph) name))))
+      (dump-dataset fh (:dataset graph) name))
+    (.flush fh)))
 
 
 (def *tooltip-generator*
