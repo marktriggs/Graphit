@@ -253,11 +253,12 @@
   (print-exceptions
    (with-open [#^BufferedReader in (reader (.getInputStream client))
                #^PrintWriter out (writer (.getOutputStream client))]
-     (.println out "Syntax: graph name:xval:line name:yval")
-     (.println out "Exit with 'done'")
-     (.flush out)
      (doseq [s (take-while #(not= % "done") (line-seq in))]
-       (add-datapoint (parse-datapoint s)))))
+       (if (= s "help")
+	 (do (.println out "Syntax: graph name:[xval]:line name:yval")
+	     (.println out "Exit with 'done'")
+	     (.flush out))
+	 (add-datapoint (parse-datapoint s))))))
   (.close client))
 
 
