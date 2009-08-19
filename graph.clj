@@ -255,7 +255,7 @@
                #^PrintWriter out (writer (.getOutputStream client))]
      (doseq [s (take-while #(not= % "done") (line-seq in))]
        (if (= s "help")
-	 (do (.println out "Syntax: graph name:[xval]:line name:yval")
+	 (do (.println out "Syntax: graph name:[xval:]line name:yval")
 	     (.println out "Exit with 'done'")
 	     (.flush out))
 	 (add-datapoint (parse-datapoint s))))))
