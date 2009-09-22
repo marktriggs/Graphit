@@ -8,8 +8,8 @@
            (java.io BufferedReader PrintWriter File)
            (java.text NumberFormat DecimalFormat SimpleDateFormat)
            (java.util Date)
-           (javax.swing JFrame JPanel JTextField BoxLayout
-                        JLabel JMenuItem JOptionPane)
+           (javax.swing JFrame JPanel JTextField BoxLayout Box
+                        JLabel JMenuItem JOptionPane JButton)
            (java.net ServerSocket Socket)
            (java.awt.event ActionListener WindowAdapter)
            (java.awt BasicStroke Dimension Color BorderLayout FlowLayout))
@@ -173,9 +173,9 @@
   (swap! *graphs* dissoc graphname))
 
 
-(defn action-listener [fn]
+(defn action-listener [f]
   (proxy [ActionListener] []
-    (actionPerformed [e] (fn e))))
+    (actionPerformed [e] (f e))))
 
 
 ;; A terrible hack ;o)
@@ -287,11 +287,20 @@
 
   (doto *status-bar*
     (.setPreferredSize (Dimension. 10 23))
-    (.setLayout (doto (FlowLayout.)
-                  (.setAlignment FlowLayout/LEFT)))
-    (.add (JLabel. "Redraw rate:"))
-    (.add *refresh-rate*)
-    (.add (JLabel. "ms")))
+    (.setLayout (BorderLayout.))
+    (.add (doto (JPanel.)
+            (.setLayout (doto (FlowLayout.)
+                          (.setAlignment FlowLayout/LEFT)))
+            (.add (JLabel. "Redraw rate:"))
+            (.add *refresh-rate*)
+            (.add (JLabel. "ms")))
+          BorderLayout/WEST)
+    (.add (doto (JButton. "Dump points")
+            (.addActionListener (action-listener
+                                 (fn [_]
+                                   (try (save-state)
+                                        (catch Exception _))))))
+          BorderLayout/EAST))
 
   (doto *panel*
     (.setLayout (BoxLayout. *panel* BoxLayout/PAGE_AXIS)))
