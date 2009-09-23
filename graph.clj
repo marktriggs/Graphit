@@ -16,6 +16,7 @@
   (:use clojure.contrib.str-utils
         clojure.contrib.duck-streams
         clojure.contrib.command-line
+        multi-frame
         swank)
   (:gen-class :name GraphIt
               :main true))
@@ -33,7 +34,7 @@
 (def *frame* (JFrame.))
 (def *status-bar* (JPanel.))
 (def *refresh-rate* (JTextField.))
-(def *panel* (JPanel.))
+(def *panel* (multi-frame))
 
 
 (defn set-refresh-rate [n]
@@ -139,10 +140,9 @@
 (defn hide-graph
   ([graphname] (hide-graph graphname false))
   ([graphname force]
-     (when (or force (> (.countComponents *panel*) 1))
+     (when (or force (> (component-count *panel*) 1))
        (let [chart (:chart (@*graphs* graphname))]
-         (.remove *panel* chart)
-         (.revalidate *panel*)))))
+         (send *panel* remove-from-frame chart)))))
 
 
 (defn hide-all-graphs
@@ -155,8 +155,7 @@
 (defn show-graph [graphname]
   (hide-graph graphname true)
   (let [chart (:chart (@*graphs* graphname))]
-    (.add *panel* chart)
-    (.revalidate *panel*)))
+    (send *panel* add-to-frame chart)))
 
 
 (defn show-all-graphs []
@@ -166,7 +165,7 @@
 
 (defn remove-graph [graphname]
   "Removes 'graphname' from the display."
-  (when (= (.countComponents *panel*) 1)
+  (when (= (component-count *panel*) 1)
     ;; show any other available graphs...
     (show-all-graphs))
   (hide-graph graphname)
@@ -218,8 +217,7 @@
      (when-not (@*graphs* graph)
        (let [dataset (XYSeriesCollection.)
              chart (make-chart graph "" dataset)]
-         (.add *panel* chart)
-         (.revalidate *panel*)
+         (send *panel* add-to-frame chart)
          (swap! *graphs* assoc graph
                 {:chart chart
                  :dataset dataset
@@ -302,9 +300,6 @@
                                         (catch Exception _))))))
           BorderLayout/EAST))
 
-  (doto *panel*
-    (.setLayout (BoxLayout. *panel* BoxLayout/PAGE_AXIS)))
-
   (.setLayout (.getContentPane *frame*)
               (BorderLayout.))
 
@@ -314,7 +309,7 @@
        (windowClosed [e] (save-state))))
     (.setDefaultCloseOperation JFrame/EXIT_ON_CLOSE)
     (.add *status-bar* BorderLayout/NORTH)
-    (.add *panel*)
+    (.add (:pane @*panel*))
     (.setSize (Dimension. 1280 1024))
     (.setVisible true)))
 
