@@ -130,7 +130,7 @@
       (doto (.getDomainAxis xyplot)
         (.setNumberFormatOverride *number-formatter*)))
 
-    (doto (ChartPanel. linechart)
+    (doto (ChartPanel. linechart true)
       (.setInitialDelay 50)
       (.setMouseWheelEnabled true)
       (.setPreferredSize (Dimension. 800 600)))))
