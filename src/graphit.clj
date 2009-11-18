@@ -1,4 +1,4 @@
-(ns graph
+(ns graphit
   (:import (org.jfree.chart ChartPanel JFreeChart ChartFactory)
            (org.jfree.data.xy XYSeries XYSeriesCollection)
            (org.jfree.chart.plot PlotOrientation)

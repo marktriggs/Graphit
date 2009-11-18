@@ -1,0 +1,11 @@
+while [ 1 ]; do
+  for i in 1 2 3; do
+    for j in 1 2 3; do
+      echo "graph$i:$j:$RANDOM"
+    done
+  done
+  sleep 1
+done | nc localhost 6666
+
+
+java -client -jar graphit.jar --redraw 2000 --port 6666
