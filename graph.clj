@@ -8,36 +8,37 @@
            (java.io BufferedReader PrintWriter File)
            (java.text NumberFormat DecimalFormat SimpleDateFormat)
            (java.util Date)
-           (javax.swing JFrame JPanel JTextField BoxLayout Box
+           (javax.swing JFrame JPanel JTextField BoxLayout
                         JLabel JMenuItem JOptionPane JButton)
            (java.net ServerSocket Socket)
            (java.awt.event ActionListener WindowAdapter)
            (java.awt BasicStroke Dimension Color BorderLayout FlowLayout))
   (:use clojure.contrib.str-utils
         clojure.contrib.duck-streams
-        clojure.contrib.command-line
-        swank)
+        clojure.contrib.command-line)
   (:gen-class :name GraphIt
               :main true))
 
 
-;; Config bits
-(def *redraw-delay-ms* nil)
-
-
 ;; Thread-shared vars
-(def *server-port* nil)
+(def *redraw-delay-ms* (atom 10000))
+
 (def *data-gatherer* (agent []))
-(def *max-readings* nil)
+(def *max-readings* (atom 120))
+
 (def *graphs* (atom {}))
-(def *frame* (JFrame.))
-(def *status-bar* (JPanel.))
-(def *refresh-rate* (JTextField.))
-(def *panel* (JPanel.))
+
+;; Ah, swing...
+(def *window*
+     {:frame (JFrame.)
+      :status (JPanel.)
+      :refresh (JTextField.)
+      :panel (JPanel.)})
+
 
 
 (defn set-refresh-rate [n]
-  (alter-var-root #'*redraw-delay-ms* (fn [_] n)))
+  (reset! *redraw-delay-ms* n))
 
 
 (defn parse-datapoint [#^String s]
@@ -99,7 +100,6 @@
                  (String/valueOf (.getYValue dataset series item))))))
 
 
-
 (defn make-chart [title y-axis dataset]
   (let [linechart (ChartFactory/createXYLineChart title
                                                   ""
@@ -117,6 +117,7 @@
         (.setDomainZeroBaselineVisible true)
         (.setRangeZeroBaselineVisible true)
         (.setBackgroundPaint (Color. 239 239 239)))
+
       (doto (.getRenderer xyplot)
         (.setBaseToolTipGenerator *tooltip-generator*)
         (.setStroke (BasicStroke. 2.0))
@@ -124,13 +125,15 @@
         (.setBaseShapesFilled true)
         (.setOutlineStroke (BasicStroke. 3.0))
         (.setDrawOutlines true))
+
       (doto (.getRangeAxis xyplot)
         (.setAutoRangeIncludesZero false)
         (.setStandardTickUnits (NumberAxis/createIntegerTickUnits)))
+
       (doto (.getDomainAxis xyplot)
         (.setNumberFormatOverride *number-formatter*)))
 
-    (doto (ChartPanel. linechart true)
+    (doto (ChartPanel. linechart)
       (.setInitialDelay 50)
       (.setMouseWheelEnabled true)
       (.setPreferredSize (Dimension. 800 600)))))
@@ -139,10 +142,10 @@
 (defn hide-graph
   ([graphname] (hide-graph graphname false))
   ([graphname force]
-     (when (or force (> (.countComponents *panel*) 1))
+     (when (or force (> (.countComponents (:panel *window*)) 1))
        (let [chart (:chart (@*graphs* graphname))]
-         (.remove *panel* chart)
-         (.revalidate *panel*)))))
+         (.remove (:panel *window*) chart)
+         (.revalidate (:panel *window*))))))
 
 
 (defn hide-all-graphs
@@ -155,8 +158,8 @@
 (defn show-graph [graphname]
   (hide-graph graphname true)
   (let [chart (:chart (@*graphs* graphname))]
-    (.add *panel* chart)
-    (.revalidate *panel*)))
+    (.add (:panel *window*) chart)
+    (.revalidate (:panel *window*))))
 
 
 (defn show-all-graphs []
@@ -164,18 +167,25 @@
     (show-graph graph)))
 
 
-(defn remove-graph [graphname]
+(defn remove-graph
   "Removes 'graphname' from the display."
-  (when (= (.countComponents *panel*) 1)
+  [graphname]
+  (when (= (.countComponents (:panel *window*)) 1)
     ;; show any other available graphs...
     (show-all-graphs))
-  (hide-graph graphname)
+  (hide-graph graphname true)
   (swap! *graphs* dissoc graphname))
 
 
-(defn action-listener [f]
+(defn action-listener [fn]
   (proxy [ActionListener] []
-    (actionPerformed [e] (f e))))
+    (actionPerformed [e] (fn e))))
+
+
+(defn menu-item [label f]
+  (doto (JMenuItem. label)
+    (.setActionCommand "PROPERTIES")
+    (.addActionListener (action-listener f))))
 
 
 ;; A terrible hack ;o)
@@ -185,29 +195,22 @@
     (.setAccessible field true)
     (doto (.get field chart)
       (.addSeparator)
-      (.add (doto (JMenuItem. "Show only this graph")
-              (.setActionCommand "PROPERTIES")
-              (.addActionListener (action-listener (fn [_]
-                                                     (hide-all-graphs true)
-                                                     (show-graph name))))))
-      (.add (doto (JMenuItem. "Hide this graph")
-              (.setActionCommand "PROPERTIES")
-              (.addActionListener (action-listener (fn [_]
-                                                     (hide-graph name))))))
-      (.add (doto (JMenuItem. "Show all graphs")
-              (.setActionCommand "PROPERTIES")
-              (.addActionListener (action-listener (fn [_]
-                                                     (show-all-graphs))))))
+      (.add (menu-item "Show only this graph"
+		       (fn [_]
+			 (hide-all-graphs true)
+			 (show-graph name))))
+      (.add (menu-item "Hide this graph"
+		       (fn [_] (hide-graph name))))
+      (.add (menu-item "Show all graphs"
+		       (fn [_] (show-all-graphs))))
       (.addSeparator)
-      (.add (doto (JMenuItem. "Delete this graph")
-              (.setActionCommand "PROPERTIES")
-              (.addActionListener (action-listener
-                                   (fn [_]
-                                     (when (= (JOptionPane/showConfirmDialog
-                                               *frame*
-                                               "Really delete?")
-                                              JOptionPane/YES_OPTION)
-                                       (remove-graph name))))))))))
+      (.add (menu-item "Delete this graph"
+		       (fn [_]
+			 (when (= (JOptionPane/showConfirmDialog
+				   (:frame *window*)
+				   "Really delete?")
+				  JOptionPane/YES_OPTION)
+			   (remove-graph name))))))))
 
 
 (defn do-plot [values]
@@ -218,8 +221,8 @@
      (when-not (@*graphs* graph)
        (let [dataset (XYSeriesCollection.)
              chart (make-chart graph "" dataset)]
-         (.add *panel* chart)
-         (.revalidate *panel*)
+         (.add (:panel *window*) chart)
+         (.revalidate (:panel *window*))
          (swap! *graphs* assoc graph
                 {:chart chart
                  :dataset dataset
@@ -228,7 +231,7 @@
 
      (when-not (get-in @*graphs* [graph :lines line])
        (let [new-line (doto (XYSeries. line)
-                        (.setMaximumItemCount *max-readings*))]
+                        (.setMaximumItemCount @*max-readings*))]
          (swap! *graphs* update-in
                 [graph :lines]
                 assoc line new-line)
@@ -245,7 +248,7 @@
      (.fireSeriesChanged line))
 
    (send-off *agent* do-plot)
-   (Thread/sleep *redraw-delay-ms*))
+   (Thread/sleep @*redraw-delay-ms*))
   [])
 
 
@@ -255,44 +258,45 @@
                #^PrintWriter out (writer (.getOutputStream client))]
      (doseq [s (take-while #(not= % "done") (line-seq in))]
        (if (= s "help")
-	 (do (.println out "Syntax: graph name:[xval:]line name:yval")
+	 (do (.println out "Syntax: graph name:[xval]:line name:yval")
 	     (.println out "Exit with 'done'")
 	     (.flush out))
 	 (add-datapoint (parse-datapoint s))))))
   (.close client))
 
 
-
-(defn handle-inputs []
+(defn handle-inputs
   "Open a socket and read lines of input."
-  (with-open [server (ServerSocket. *server-port*)]
-    (println "Listening on" *server-port*)
+  [port]
+  (with-open [server (ServerSocket. port)]
+    (println "Listening on" port)
     (while true
       (print-exceptions
        (let [client (.accept server)]
-         (.start (Thread. #(handle-client client))))))))
+         (future (handle-client client)))))))
 
 
 (defn save-state []
   (dump-state (File. (System/getenv "HOME") ".graphit.state")))
 
+
 (defn run-plotter []
-  (doto *refresh-rate*
+  (doto (:refresh *window*)
     (.addActionListener (action-listener
                          #(try (set-refresh-rate
                                 (Integer. (.getActionCommand %)))
                                (catch Exception _))))
     (.setColumns 6)
-    (.setText (str *redraw-delay-ms*)))
+    (.setText (str @*redraw-delay-ms*)))
 
-  (doto *status-bar*
+  (doto (:status *window*)
     (.setPreferredSize (Dimension. 10 23))
     (.setLayout (BorderLayout.))
     (.add (doto (JPanel.)
             (.setLayout (doto (FlowLayout.)
                           (.setAlignment FlowLayout/LEFT)))
             (.add (JLabel. "Redraw rate:"))
-            (.add *refresh-rate*)
+            (.add (:refresh *window*))
             (.add (JLabel. "ms")))
           BorderLayout/WEST)
     (.add (doto (JButton. "Dump points")
@@ -302,39 +306,21 @@
                                         (catch Exception _))))))
           BorderLayout/EAST))
 
-  (doto *panel*
-    (.setLayout (BoxLayout. *panel* BoxLayout/PAGE_AXIS)))
+  (doto (:panel *window*)
+    (.setLayout (BoxLayout. (:panel *window*) BoxLayout/PAGE_AXIS)))
 
-  (.setLayout (.getContentPane *frame*)
+  (.setLayout (.getContentPane (:frame *window*))
               (BorderLayout.))
 
-  (doto *frame*
+  (doto (:frame *window*)
     (.addWindowListener
      (proxy [WindowAdapter] []
        (windowClosed [e] (save-state))))
     (.setDefaultCloseOperation JFrame/EXIT_ON_CLOSE)
-    (.add *status-bar* BorderLayout/NORTH)
-    (.add *panel*)
+    (.add (:status *window*) BorderLayout/NORTH)
+    (.add (:panel *window*))
     (.setSize (Dimension. 1280 1024))
     (.setVisible true)))
-
-
-(defn run [max-to-keep port swank-port redraw-ms]
-  (let [data-handler (agent nil)]
-
-    (.addShutdownHook (Runtime/getRuntime)
-                      (Thread. #(save-state)))
-
-    (alter-var-root #'*redraw-delay-ms* (fn [_] (Integer. redraw-ms)))
-    (alter-var-root #'*server-port* (fn [_] (Integer. port)))
-    (alter-var-root #'*max-readings* (fn [_] (Integer. max-to-keep)))
-
-    (.start (Thread. handle-inputs))
-    (send-off *data-gatherer* do-plot)
-    (when swank-port
-      (binding [*3 nil *2 nil *1 nil *e nil]
-        (swank/start-server "/dev/null" :port (Integer. swank-port))))
-    (run-plotter)))
 
 
 (defn -main [& args]
@@ -342,6 +328,15 @@
       "A handy graphing thingy"
       [[max-to-keep "Maximum points to keep per line" "120"]
        [port "Listen port" "6666"]
-       [swank-port "Swank listen port"]
        [redraw "Redraw ms" "2000"]]
-    (run max-to-keep port swank-port redraw)))
+
+    (.addShutdownHook (Runtime/getRuntime)
+                      (Thread. #(save-state)))
+
+    (set-refresh-rate (Integer. redraw))
+    (reset! *max-readings* (Integer. max-to-keep))
+
+    (future (handle-inputs (Integer. port)))
+
+    (send-off *data-gatherer* do-plot)
+    (run-plotter)))
