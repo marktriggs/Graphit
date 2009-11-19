@@ -1,11 +1,73 @@
-while [ 1 ]; do
-  for i in 1 2 3; do
-    for j in 1 2 3; do
-      echo "graph$i:$j:$RANDOM"
+Background
+----------
+
+Graphit is a tool that reads time-based numeric data over a network
+socket and plots it in near real-time.
+
+I'm in the unfortunate position of being a systems administrator by day,
+and that means keeping an eye on lots of different things--load
+averages, number of Apache processes, number of threads for certain
+applications, things like that.  Tools like RRDTool do a great job of
+gathering and plotting data, but they're not really designed for
+real-time visualisation.  I wanted something I could stare at the
+quieter moments.
+
+Graphit uses the wonderful JFreeChart (http://www.jfree.org/jfreechart/)
+to do its plotting.  The other bits (the easy bits) are Clojure code to
+handle reading data from a socket, tracking multiple graphs, and that
+sort of thing.
+
+
+Building it
+-----------
+
+Thanks to the wonders Of Leiningen and Clojars this should be easy to
+build.  The steps:
+
+  1.  Get Leiningen from http://github.com/technomancy/leiningen and put
+      the 'lein' script somewhere in your $PATH.
+
+  2.  From graphit's root directory, run `lein uberjar'.  Lein will grab
+      all required dependencies and produce a `graphit.jar'.
+
+  3.  Run the jar with, for example:
+
+        java -jar graphit.jar --redraw 2000 --port 6666
+
+      This will redraw all graphs once every two seconds, and will
+      listen on port 666 for data.
+
+
+Trying it out
+-------------
+
+Once Graphit is running, you can plot some random lines just by using
+bash and netcat:
+
+  #!/bin/bash
+
+  while [ 1 ]; do
+    for i in 1 2 3; do
+      for j in 1 2 3; do
+        echo "graph$i:$j:$RANDOM"
+      done
     done
-  done
-  sleep 1
-done | nc localhost 6666
+    sleep 1
+  done | nc localhost 6666
 
 
-java -client -jar graphit.jar --redraw 2000 --port 6666
+And that's about all there is to know: you connect to Graphit on its
+port, send it one-reading per line in either this format:
+
+  name of graph:name of line:y value
+
+or this one:
+
+  name of graph:x value:name of line:y value  
+
+
+JFreeChart gives some niceties for free: you can drag a rectangle to
+zoom in, hold down control and click+drag to pan around, right click to
+get a context menu.  All sorts of wonderful things.
+
+The end.  Thanks for reading.
