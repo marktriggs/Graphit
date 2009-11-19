@@ -30,6 +30,9 @@ build.  The steps:
   2.  From graphit's root directory, run `lein uberjar'.  Lein will grab
       all required dependencies and produce a `graphit.jar'.
 
+      Note: Thanks to Java's AWT madness you seem to need your DISPLAY
+        environment variable set to even compile the thing.
+
   3.  Run the jar with, for example:
 
         java -jar graphit.jar --redraw 2000 --port 6666
