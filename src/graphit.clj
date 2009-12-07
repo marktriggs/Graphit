@@ -213,6 +213,11 @@
                            (remove-graph name))))))))
 
 
+(defn series-seq [xyseries]
+  (map #(.getDataItem xyseries %)
+       (range (.getItemCount xyseries))))
+
+
 (defn do-plot [values]
   (print-exceptions
 
@@ -243,7 +248,19 @@
            #^Number time #^Number value false))
 
    (doseq [graph (vals @*graphs*)]
-     (.fireSeriesChanged (first (-> graph :lines vals))))
+     (.fireSeriesChanged (first (-> graph :lines vals)))
+     (doseq [line (vals (:lines graph))
+             :let [last-reading (.getMaxX line)]]
+       ;; Experimental: if any line has had *max-readings* data points since
+       ;; this line's most recent datapoint, "expire" this line.
+       (when (some (fn [line]
+                     (>= (count (filter #(>= (.getXValue %)
+                                             last-reading)
+                                        (series-seq line)))
+                         @*max-readings*))
+                   (vals (:lines graph)))
+         (.removeSeries (:dataset graph)
+                        line))))
 
    (send-off *agent* do-plot)
    (Thread/sleep @*redraw-delay-ms*))
