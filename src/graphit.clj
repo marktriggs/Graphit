@@ -9,7 +9,7 @@
            (java.text NumberFormat DecimalFormat SimpleDateFormat)
            (java.util Date)
            (javax.swing JFrame JPanel JTextField BoxLayout
-                        JLabel JMenuItem JOptionPane JButton)
+                        JLabel JMenuItem JOptionPane JButton SwingUtilities)
            (java.net ServerSocket Socket)
            (java.awt.event ActionListener WindowAdapter)
            (java.awt BasicStroke Dimension Color BorderLayout FlowLayout))
@@ -94,14 +94,11 @@
 (def *tooltip-generator*
      (proxy [XYToolTipGenerator] []
        (generateToolTip [dataset series item]
-         (try
-          (format "%s, %s, %s"
-                  (.getSeriesKey dataset series)
-                  (.format *number-formatter*
-                           (.getXValue dataset series item))
-                  (String/valueOf (.getYValue dataset series item)))
-          (catch Exception _
-            "")))))
+         (format "%s, %s, %s"
+                 (.getSeriesKey dataset series)
+                 (.format *number-formatter*
+                          (.getXValue dataset series item))
+                 (String/valueOf (.getYValue dataset series item))))))
 
 
 (defn make-chart [title y-axis dataset]
@@ -232,53 +229,55 @@
 
 
 (defn do-plot [values]
-  (print-exceptions
+  (SwingUtilities/invokeLater
+   (fn []
+     (print-exceptions
 
-   (doseq [{:keys [graph time line value]} values]
+      (doseq [{:keys [graph time line value]} values]
 
-     (when-not (@*graphs* graph)
-       (let [dataset (XYSeriesCollection.)
-             chart (make-chart graph "" dataset)]
-         (.add (:panel *window*) chart)
-         (.revalidate (:panel *window*))
-         (swap! *graphs* assoc graph
-                {:chart chart
-                 :dataset dataset
-                 :lines {}})
-         (instrument-popup-menu graph)))
+        (when-not (@*graphs* graph)
+          (let [dataset (XYSeriesCollection.)
+                chart (make-chart graph "" dataset)]
+            (.add (:panel *window*) chart)
+            (.revalidate (:panel *window*))
+            (swap! *graphs* assoc graph
+                   {:chart chart
+                    :dataset dataset
+                    :lines {}})
+            (instrument-popup-menu graph)))
 
-     (when-not (get-in @*graphs* [graph :lines line])
-       (let [new-line (doto (XYSeries. line)
-                        (.setMaximumItemCount @*max-readings*))]
-         (swap! *graphs* update-in
-                [graph :lines]
-                assoc line new-line)
+        (when-not (get-in @*graphs* [graph :lines line])
+          (let [new-line (doto (XYSeries. line)
+                           (.setMaximumItemCount @*max-readings*))]
+            (swap! *graphs* update-in
+                   [graph :lines]
+                   assoc line new-line)
 
-         (.addSeries (get-in @*graphs* [graph :dataset])
-                     new-line)))
+            (.addSeries (get-in @*graphs* [graph :dataset])
+                        new-line)))
 
-     (.add #^XYSeries (get-in @*graphs* [graph :lines line])
-           #^Number time #^Number value false))
+        (.add #^XYSeries (get-in @*graphs* [graph :lines line])
+              #^Number time #^Number value false))
 
-   (doseq [[graph-name graph] @*graphs*]
-     (doseq [[label line] (:lines graph)
-             :let [last-reading (.getMaxX line)]]
-       ;; Experimental: if any line has had *expire-threshold*
-       ;; data points since this line's most recent datapoint, "expire" this
-       ;; line.
-       (when (some (fn [line]
-                     (> (count (filter #(> (.getXValue %)
-                                           last-reading)
-                                       (series-seq line)))
-                        @*expire-threshold*))
-                   (vals (:lines graph)))
-         (delete-line graph-name label))))
+      (doseq [[graph-name graph] @*graphs*]
+        (doseq [[label line] (:lines graph)
+                :let [last-reading (.getMaxX line)]]
+          ;; Experimental: if any line has had *expire-threshold*
+          ;; data points since this line's most recent datapoint, "expire" this
+          ;; line.
+          (when (some (fn [line]
+                        (> (count (filter #(> (.getXValue %)
+                                              last-reading)
+                                          (series-seq line)))
+                           @*expire-threshold*))
+                      (vals (:lines graph)))
+            (delete-line graph-name label))))
 
-   (doseq [graph (vals @*graphs*)]
-     (.fireSeriesChanged (first (-> graph :lines vals))))
+      (doseq [graph (vals @*graphs*)]
+        (.fireSeriesChanged (first (-> graph :lines vals))))
 
-   (send-off *agent* do-plot)
-   (Thread/sleep @*redraw-delay-ms*))
+      (send-off *data-gatherer* do-plot))))
+  (Thread/sleep @*redraw-delay-ms*)
   [])
 
 
