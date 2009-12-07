@@ -94,11 +94,14 @@
 (def *tooltip-generator*
      (proxy [XYToolTipGenerator] []
        (generateToolTip [dataset series item]
-         (format "%s, %s, %s"
-                 (.getSeriesKey dataset series)
-                 (.format *number-formatter*
-                          (.getXValue dataset series item))
-                 (String/valueOf (.getYValue dataset series item))))))
+         (try
+          (format "%s, %s, %s"
+                  (.getSeriesKey dataset series)
+                  (.format *number-formatter*
+                           (.getXValue dataset series item))
+                  (String/valueOf (.getYValue dataset series item)))
+          (catch Exception _
+            "")))))
 
 
 (defn make-chart [title y-axis dataset]
