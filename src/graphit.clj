@@ -196,21 +196,21 @@
     (doto (.get field chart)
       (.addSeparator)
       (.add (menu-item "Show only this graph"
-		       (fn [_]
-			 (hide-all-graphs true)
-			 (show-graph name))))
+                       (fn [_]
+                         (hide-all-graphs true)
+                         (show-graph name))))
       (.add (menu-item "Hide this graph"
-		       (fn [_] (hide-graph name))))
+                       (fn [_] (hide-graph name))))
       (.add (menu-item "Show all graphs"
-		       (fn [_] (show-all-graphs))))
+                       (fn [_] (show-all-graphs))))
       (.addSeparator)
       (.add (menu-item "Delete this graph"
-		       (fn [_]
-			 (when (= (JOptionPane/showConfirmDialog
-				   (:frame *window*)
-				   "Really delete?")
-				  JOptionPane/YES_OPTION)
-			   (remove-graph name))))))))
+                       (fn [_]
+                         (when (= (JOptionPane/showConfirmDialog
+                                   (:frame *window*)
+                                   "Really delete?")
+                                  JOptionPane/YES_OPTION)
+                           (remove-graph name))))))))
 
 
 (defn do-plot [values]
@@ -242,10 +242,8 @@
      (.add #^XYSeries (get-in @*graphs* [graph :lines line])
            #^Number time #^Number value false))
 
-   (doseq [#^XYSeries line (for [graph (vals @*graphs*)
-                                 line (-> graph :lines vals)]
-                             line)]
-     (.fireSeriesChanged line))
+   (doseq [graph (vals @*graphs*)]
+     (.fireSeriesChanged (first (-> graph :lines vals))))
 
    (send-off *agent* do-plot)
    (Thread/sleep @*redraw-delay-ms*))
@@ -258,10 +256,10 @@
                #^PrintWriter out (writer (.getOutputStream client))]
      (doseq [s (take-while #(not= % "done") (line-seq in))]
        (if (= s "help")
-	 (do (.println out "Syntax: graph name:[xval]:line name:yval")
-	     (.println out "Exit with 'done'")
-	     (.flush out))
-	 (add-datapoint (parse-datapoint s))))))
+         (do (.println out "Syntax: graph name:[xval]:line name:yval")
+             (.println out "Exit with 'done'")
+             (.flush out))
+         (add-datapoint (parse-datapoint s))))))
   (.close client))
 
 
