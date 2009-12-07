@@ -24,6 +24,7 @@
 (def *redraw-delay-ms* (atom 10000))
 
 (def *data-gatherer* (agent []))
+(def *expire-threshold* (atom (Integer/MAX_VALUE)))
 (def *max-readings* (atom 120))
 
 (def *graphs* (atom {}))
@@ -218,6 +219,15 @@
        (range (.getItemCount xyseries))))
 
 
+(defn delete-line [graph-name label]
+  (let [graph (@*graphs* graph-name)
+        line (get-in graph [:lines label])]
+    (.removeSeries (:dataset graph) line)
+    (swap! *graphs* update-in
+           [graph-name :lines]
+           dissoc label)))
+
+
 (defn do-plot [values]
   (print-exceptions
 
@@ -247,20 +257,22 @@
      (.add #^XYSeries (get-in @*graphs* [graph :lines line])
            #^Number time #^Number value false))
 
-   (doseq [graph (vals @*graphs*)]
-     (.fireSeriesChanged (first (-> graph :lines vals)))
-     (doseq [line (vals (:lines graph))
+   (doseq [[graph-name graph] @*graphs*]
+     (doseq [[label line] (:lines graph)
              :let [last-reading (.getMaxX line)]]
-       ;; Experimental: if any line has had *max-readings* data points since
-       ;; this line's most recent datapoint, "expire" this line.
+       ;; Experimental: if any line has had *expire-threshold*
+       ;; data points since this line's most recent datapoint, "expire" this
+       ;; line.
        (when (some (fn [line]
-                     (>= (count (filter #(>= (.getXValue %)
-                                             last-reading)
-                                        (series-seq line)))
-                         @*max-readings*))
+                     (> (count (filter #(> (.getXValue %)
+                                           last-reading)
+                                       (series-seq line)))
+                        @*expire-threshold*))
                    (vals (:lines graph)))
-         (.removeSeries (:dataset graph)
-                        line))))
+         (delete-line graph-name label))))
+
+   (doseq [graph (vals @*graphs*)]
+     (.fireSeriesChanged (first (-> graph :lines vals))))
 
    (send-off *agent* do-plot)
    (Thread/sleep @*redraw-delay-ms*))
@@ -342,6 +354,9 @@
   (with-command-line args
       "A handy graphing thingy"
       [[max-to-keep "Maximum points to keep per line" "120"]
+       [expire-threshold
+        "The number of points a line can fall behind other lines before being expired."
+        nil]
        [port "Listen port" "6666"]
        [redraw "Redraw ms" "2000"]]
 
@@ -349,6 +364,8 @@
                       (Thread. #(save-state)))
 
     (set-refresh-rate (Integer. redraw))
+    (when expire-threshold
+      (reset! *expire-threshold* (Integer. expire-threshold)))
     (reset! *max-readings* (Integer. max-to-keep))
 
     (future (handle-inputs (Integer. port)))
