@@ -43,15 +43,17 @@
 
 
 (defn parse-datapoint [#^String s]
-  (let [[graph & bits] (.split s ":")]
-    (let [[time label num] (if (= (count bits) 2)
-                             (concat [(System/currentTimeMillis)] bits)
-                             (cons (BigDecimal. #^String (first bits))
-                                   (rest bits)))]
-      {:graph graph
-       :time time
-       :line label
-       :value (.parse (NumberFormat/getInstance) num)})))
+  (let [[graph & bits] (.split s ":")
+        [time label num] (if (= (count bits) 2)
+                           (concat [(System/currentTimeMillis)] bits)
+                           (cons (BigDecimal. #^String (first bits))
+                                 (rest bits)))]
+    {:graph graph
+     :time time
+     :line label
+     :value (if (= num "delete")
+              num
+              (.parse (NumberFormat/getInstance) num))}))
 
 
 (defn add-datapoint [point]
@@ -256,8 +258,10 @@
             (.addSeries (get-in @*graphs* [graph :dataset])
                         new-line)))
 
-        (.add #^XYSeries (get-in @*graphs* [graph :lines line])
-              #^Number time #^Number value false))
+        (if (= value "delete")
+          (delete-line graph line)
+          (.add #^XYSeries (get-in @*graphs* [graph :lines line])
+                #^Number time #^Number value false)))
 
       (doseq [[graph-name graph] @*graphs*]
         (doseq [[label line] (:lines graph)
@@ -287,7 +291,7 @@
                #^PrintWriter out (writer (.getOutputStream client))]
      (doseq [s (take-while #(not= % "done") (line-seq in))]
        (if (= s "help")
-         (do (.println out "Syntax: graph name:[xval]:line name:yval")
+         (do (.println out "Syntax: graph name:[xval]:line name:(yval|\"delete\")")
              (.println out "Exit with 'done'")
              (.flush out))
          (add-datapoint (parse-datapoint s))))))
