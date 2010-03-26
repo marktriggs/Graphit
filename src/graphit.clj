@@ -28,6 +28,7 @@
 (def *max-readings* (atom 120))
 
 (def *graphs* (atom {}))
+(def *hide-legend* (atom nil))
 
 ;; Ah, swing...
 (def *window*
@@ -110,6 +111,8 @@
                                                   dataset
                                                   PlotOrientation/VERTICAL
                                                   true true false)]
+    (when @*hide-legend*
+      (.removeLegend linechart))
     (.setAntiAlias linechart true)
 
     ;; Initialisation gumpf
@@ -363,6 +366,7 @@
        [expire-threshold
         "The number of points a line can fall behind other lines before being expired."
         nil]
+       [hide-legend "Don't display the graph's legend"]
        [port "Listen port" "6666"]
        [redraw "Redraw ms" "2000"]]
 
@@ -373,7 +377,7 @@
     (when expire-threshold
       (reset! *expire-threshold* (Integer. expire-threshold)))
     (reset! *max-readings* (Integer. max-to-keep))
-
+    (reset! *hide-legend* hide-legend)
     (future (handle-inputs (Integer. port)))
 
     (send-off *data-gatherer* do-plot)
