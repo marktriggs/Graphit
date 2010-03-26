@@ -112,7 +112,8 @@
                                                   PlotOrientation/VERTICAL
                                                   true true false)]
     (when @*hide-legend*
-      (.removeLegend linechart))
+      (.setVisible (.getLegend linechart)
+                   false))
     (.setAntiAlias linechart true)
 
     ;; Initialisation gumpf
