@@ -52,7 +52,7 @@ bash and netcat:
   while [ 1 ]; do
     for i in 1 2 3; do
       for j in 1 2 3; do
-        echo "graph$i:$j:$RANDOM"
+        echo -e "graph$i\t$j\t$RANDOM"
       done
     done
     sleep 1
@@ -62,11 +62,15 @@ bash and netcat:
 And that's about all there is to know: you connect to Graphit on its
 port, send it one-reading per line in either this format:
 
-  name of graph:name of line:y value
+  name of graph[tab]name of line[tab]y value
 
 or this one:
 
-  name of graph:x value:name of line:y value  
+  name of graph[tab]x value[tab]name of line[tab]y value  
+
+or if you want to do times:
+
+  name of graph[tab]time strnig[tab]name of line[tab]y value[tab]SimleDateFormat string
 
 
 JFreeChart gives some niceties for free: you can drag a rectangle to

@@ -43,14 +43,23 @@
   (reset! *redraw-delay-ms* n))
 
 
+(defn parse-time [time timefmt]
+  (if (string? time)
+    (if timefmt
+      (.. (SimpleDateFormat. timefmt)
+          (parse time)
+          getTime)
+      (BigDecimal. time))
+    time))
+
+
 (defn parse-datapoint [#^String s]
-  (let [[graph & bits] (.split s ":")
-        [time label num] (if (= (count bits) 2)
-                           (concat [(System/currentTimeMillis)] bits)
-                           (cons (BigDecimal. #^String (first bits))
-                                 (rest bits)))]
+  (let [[graph & bits] (.split s "\t")
+        [time label num timefmt] (if (= (count bits) 2)
+                                   (concat [(System/currentTimeMillis)] bits)
+                                   bits)]
     {:graph graph
-     :time time
+     :time (parse-time time timefmt)
      :line label
      :value (if (= num "delete")
               num
@@ -80,7 +89,7 @@
           series (.getSeries dataset key)]
       (doseq [data-item (.getItems series)]
         (.println wrtr
-                  (format "%s:%f:%s:%f"
+                  (format "%s\t%f\t%s\t%f"
                           graph-name
                           (double (.getX data-item))
                           key
