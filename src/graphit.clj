@@ -9,13 +9,16 @@
            (java.text NumberFormat DecimalFormat SimpleDateFormat)
            (java.util Date)
            (javax.swing JFrame JPanel JTextField BoxLayout
-                        JLabel JMenuItem JOptionPane JButton SwingUtilities)
+                        JLabel JMenuItem JOptionPane JButton SwingUtilities
+                        JCheckBox BorderFactory)
            (java.net ServerSocket Socket)
-           (java.awt.event ActionListener WindowAdapter)
+           (java.awt.event ActionListener ItemListener ItemEvent WindowAdapter)
            (java.awt BasicStroke Dimension Color BorderLayout FlowLayout))
   (:use clojure.contrib.str-utils
         clojure.contrib.duck-streams
         clojure.contrib.command-line)
+  (:require tabpane)
+
   (:gen-class :name GraphIt
               :main true))
 
@@ -26,6 +29,10 @@
 (def *data-gatherer* (agent []))
 (def *expire-threshold* (atom (Integer/MAX_VALUE)))
 (def *max-readings* (atom 120))
+(def *graphs-per-page* (atom 4))
+
+(def *tab-cycle-active* (atom false))
+(def *tab-cycle-delay* (atom 30))
 
 (def *graphs* (atom {}))
 (def *hide-legend* (atom nil))
@@ -35,12 +42,14 @@
      {:frame (JFrame.)
       :status (JPanel.)
       :refresh (JTextField.)
-      :panel (JPanel.)})
-
+      :panel (tabpane/tabpane *graphs-per-page*)})
 
 
 (defn set-refresh-rate [n]
   (reset! *redraw-delay-ms* n))
+
+(defn set-cycle-rate [n]
+  (reset! *tab-cycle-delay* n))
 
 
 (defn parse-time [time timefmt]
@@ -151,17 +160,15 @@
 
     (doto (ChartPanel. linechart)
       (.setInitialDelay 50)
-      (.setMouseWheelEnabled true)
-      (.setPreferredSize (Dimension. 800 600)))))
+      (.setMouseWheelEnabled true))))
 
 
 (defn hide-graph
   ([graphname] (hide-graph graphname false))
   ([graphname force]
-     (when (or force (> (.countComponents (:panel *window*)) 1))
+     (when (or force (> (tabpane/child-count (:panel *window*)) 1))
        (let [chart (:chart (@*graphs* graphname))]
-         (.remove (:panel *window*) chart)
-         (.revalidate (:panel *window*))))))
+         (tabpane/remove-panel (:panel *window*) chart)))))
 
 
 (defn hide-all-graphs
@@ -174,8 +181,7 @@
 (defn show-graph [graphname]
   (hide-graph graphname true)
   (let [chart (:chart (@*graphs* graphname))]
-    (.add (:panel *window*) chart)
-    (.revalidate (:panel *window*))))
+    (tabpane/add-panel (:panel *window*) chart)))
 
 
 (defn show-all-graphs []
@@ -186,12 +192,16 @@
 (defn remove-graph
   "Removes 'graphname' from the display."
   [graphname]
-  (when (= (.countComponents (:panel *window*)) 1)
+  (when (= (tabpane/child-count (:panel *window*)) 1)
     ;; show any other available graphs...
     (show-all-graphs))
   (hide-graph graphname true)
   (swap! *graphs* dissoc graphname))
 
+
+(defn item-listener [fn]
+  (proxy [ItemListener] []
+    (itemStateChanged [e] (fn e))))
 
 (defn action-listener [fn]
   (proxy [ActionListener] []
@@ -253,8 +263,7 @@
         (when-not (@*graphs* graph)
           (let [dataset (XYSeriesCollection.)
                 chart (make-chart graph "" dataset)]
-            (.add (:panel *window*) chart)
-            (.revalidate (:panel *window*))
+            (tabpane/add-panel (:panel *window*) chart)
             (swap! *graphs* assoc graph
                    {:chart chart
                     :dataset dataset
@@ -327,58 +336,76 @@
 
 
 (defn run-plotter []
-  (doto (:refresh *window*)
-    (.addActionListener (action-listener
-                         #(try (set-refresh-rate
+  (SwingUtilities/invokeLater
+   (fn []
+     (doto (:refresh *window*)
+       (.addActionListener (action-listener
+                            #(try (set-refresh-rate
+                                   (Integer. (.getActionCommand %)))
+                                  (catch Exception _))))
+       (.setColumns 6)
+       (.setText (str @*redraw-delay-ms*)))
+
+     (doto (:status *window*)
+       (.setPreferredSize (Dimension. 15 33))
+       (.setBorder (BorderFactory/createEmptyBorder 5 5 5 5))
+       (.setLayout (BorderLayout.))
+       (.add (doto (JPanel.)
+               (.setLayout (doto (FlowLayout.)
+                             (.setAlignment FlowLayout/LEFT)))
+               (.add (JLabel. "Redraw rate:"))
+               (.add (:refresh *window*))
+               (.add (doto (JLabel. "ms")
+                       (.setBorder (BorderFactory/createEmptyBorder 0 0 0 40))))
+
+               (.add (doto (JCheckBox.)
+                       (.addItemListener
+                        (item-listener
+                         #(try
+                           (reset! *tab-cycle-active*
+                                  (= (.getStateChange %) ItemEvent/SELECTED))
+                           (catch Exception _))))))
+               (.add (JLabel. "Cycle tabs every "))
+               (.add (doto (JTextField. nil (str @*tab-cycle-delay*) 3)
+                       (.addActionListener
+                        (action-listener
+                         #(try (set-cycle-rate
                                 (Integer. (.getActionCommand %)))
-                               (catch Exception _))))
-    (.setColumns 6)
-    (.setText (str @*redraw-delay-ms*)))
+                               (catch Exception _))))))
+               (.add (JLabel. " secs")))
+             BorderLayout/WEST)
+       (.add (doto (JButton. "Dump points")
+               (.addActionListener (action-listener
+                                    (fn [_]
+                                      (try (save-state)
+                                           (catch Exception _))))))
+             BorderLayout/EAST))
 
-  (doto (:status *window*)
-    (.setPreferredSize (Dimension. 10 23))
-    (.setLayout (BorderLayout.))
-    (.add (doto (JPanel.)
-            (.setLayout (doto (FlowLayout.)
-                          (.setAlignment FlowLayout/LEFT)))
-            (.add (JLabel. "Redraw rate:"))
-            (.add (:refresh *window*))
-            (.add (JLabel. "ms")))
-          BorderLayout/WEST)
-    (.add (doto (JButton. "Dump points")
-            (.addActionListener (action-listener
-                                 (fn [_]
-                                   (try (save-state)
-                                        (catch Exception _))))))
-          BorderLayout/EAST))
+     (.setLayout (.getContentPane (:frame *window*))
+                 (BorderLayout.))
 
-  (doto (:panel *window*)
-    (.setLayout (BoxLayout. (:panel *window*) BoxLayout/PAGE_AXIS)))
-
-  (.setLayout (.getContentPane (:frame *window*))
-              (BorderLayout.))
-
-  (doto (:frame *window*)
-    (.addWindowListener
-     (proxy [WindowAdapter] []
-       (windowClosed [e] (save-state))))
-    (.setDefaultCloseOperation JFrame/EXIT_ON_CLOSE)
-    (.add (:status *window*) BorderLayout/NORTH)
-    (.add (:panel *window*))
-    (.setSize (Dimension. 1280 1024))
-    (.setVisible true)))
+     (doto (:frame *window*)
+       (.addWindowListener
+        (proxy [WindowAdapter] []
+          (windowClosed [e] (save-state))))
+       (.setDefaultCloseOperation JFrame/EXIT_ON_CLOSE)
+       (.add (:status *window*) BorderLayout/NORTH)
+       (.add (tabpane/get-panel (:panel *window*)))
+       (.setSize (Dimension. 1280 1024))
+       (.setVisible true)))))
 
 
 (defn -main [& args]
   (with-command-line args
-      "A handy graphing thingy"
-      [[max-to-keep "Maximum points to keep per line" "120"]
-       [expire-threshold
-        "The number of points a line can fall behind other lines before being expired."
-        nil]
-       [hide-legend "Don't display the graph's legend"]
-       [port "Listen port" "6666"]
-       [redraw "Redraw ms" "2000"]]
+    "A handy graphing thingy"
+    [[max-to-keep "Maximum points to keep per line" "120"]
+     [expire-threshold
+      "The number of points a line can fall behind other lines before being expired."
+      nil]
+     [hide-legend "Don't display the graph's legend"]
+     [graphs-per-page "Number of graphs per tabbed page" "4"]
+     [port "Listen port" "6666"]
+     [redraw "Redraw ms" "2000"]]
 
     (.addShutdownHook (Runtime/getRuntime)
                       (Thread. #(save-state)))
@@ -388,7 +415,14 @@
       (reset! *expire-threshold* (Integer. expire-threshold)))
     (reset! *max-readings* (Integer. max-to-keep))
     (reset! *hide-legend* hide-legend)
+    (reset! *graphs-per-page* (Integer. graphs-per-page))
     (future (handle-inputs (Integer. port)))
 
     (send-off *data-gatherer* do-plot)
+    (future
+     (while true
+       (when @*tab-cycle-active*
+         (tabpane/cycle-tab (:panel *window*)))
+       (Thread/sleep (* @*tab-cycle-delay*
+                        1000))))
     (run-plotter)))
