@@ -37,7 +37,25 @@
 (def *graphs* (atom {}))
 (def *hide-legend* (atom nil))
 
-;; Ah, swing...
+
+;; Objects used for interruptible sleeps
+(def *plot-alarm* (Object.))
+(def *tab-cycle-alarm* (Object.))
+
+
+;;; Misc utilities
+
+(defn interruptible-sleep [ms alarm]
+  (locking alarm
+    (.wait alarm ms)))
+
+(defn interrupt-sleep [alarm]
+  (locking alarm
+    (.notify alarm)))
+
+
+;;; Ah, swing...
+
 (def *window*
      {:frame (JFrame.)
       :status (JPanel.)
@@ -45,11 +63,18 @@
       :panel (tabpane/tabpane *graphs-per-page*)})
 
 
-(defn set-refresh-rate [n]
-  (reset! *redraw-delay-ms* n))
+(defn set-rate
+  "Set the value of `atom' to `n' and interrupt `alarm' to wake up its owner."
+  [atom n alarm]
+
+  (reset! atom n)
+  (interrupt-sleep alarm))
+
 
 (defn set-cycle-rate [n]
-  (reset! *tab-cycle-delay* n))
+  (reset! *tab-cycle-delay* n)
+
+  (interrupt-sleep *tab-cycle-alarm*))
 
 
 (defn parse-time [time timefmt]
@@ -303,7 +328,7 @@
         (.fireSeriesChanged (first (-> graph :lines vals))))
 
       (send-off *data-gatherer* do-plot))))
-  (Thread/sleep @*redraw-delay-ms*)
+  (interruptible-sleep @*redraw-delay-ms* *plot-alarm*)
   [])
 
 
@@ -340,8 +365,10 @@
    (fn []
      (doto (:refresh *window*)
        (.addActionListener (action-listener
-                            #(try (set-refresh-rate
-                                   (Integer. (.getActionCommand %)))
+                            #(try (set-rate
+                                   *redraw-delay-ms*
+                                   (Integer. (.getActionCommand %))
+                                   *plot-alarm*)
                                   (catch Exception _))))
        (.setColumns 6)
        (.setText (str @*redraw-delay-ms*)))
@@ -369,9 +396,11 @@
                (.add (doto (JTextField. nil (str @*tab-cycle-delay*) 3)
                        (.addActionListener
                         (action-listener
-                         #(try (set-cycle-rate
-                                (Integer. (.getActionCommand %)))
-                               (catch Exception _))))))
+                         #(try
+                           (set-rate *tab-cycle-delay*
+                                     (Integer. (.getActionCommand %))
+                                     *tab-cycle-alarm*)
+                           (catch Exception _))))))
                (.add (JLabel. " secs")))
              BorderLayout/WEST)
        (.add (doto (JButton. "Dump points")
@@ -410,7 +439,7 @@
     (.addShutdownHook (Runtime/getRuntime)
                       (Thread. #(save-state)))
 
-    (set-refresh-rate (Integer. redraw))
+    (set-rate *redraw-delay-ms* (Integer. redraw) *plot-alarm*)
     (when expire-threshold
       (reset! *expire-threshold* (Integer. expire-threshold)))
     (reset! *max-readings* (Integer. max-to-keep))
@@ -423,6 +452,5 @@
      (while true
        (when @*tab-cycle-active*
          (tabpane/cycle-tab (:panel *window*)))
-       (Thread/sleep (* @*tab-cycle-delay*
-                        1000))))
+       (interruptible-sleep (* @*tab-cycle-delay* 1000) *tab-cycle-alarm*)))
     (run-plotter)))
