@@ -8,9 +8,9 @@
            (java.io BufferedReader PrintWriter File)
            (java.text NumberFormat DecimalFormat SimpleDateFormat)
            (java.util Date)
-           (javax.swing JFrame JPanel JTextField BoxLayout
+           (javax.swing JFrame JPanel JTextField BoxLayout Box
                         JLabel JMenuItem JOptionPane JButton SwingUtilities
-                        JCheckBox BorderFactory)
+                        SwingConstants JCheckBox BorderFactory JSeparator)
            (java.net ServerSocket Socket)
            (java.awt.event ActionListener ItemListener ItemEvent WindowAdapter)
            (java.awt BasicStroke Dimension Color BorderLayout FlowLayout))
@@ -58,8 +58,6 @@
 
 (def *window*
      {:frame (JFrame.)
-      :status (JPanel.)
-      :refresh (JTextField.)
       :panel (tabpane/tabpane *graphs-per-page*)})
 
 
@@ -69,12 +67,6 @@
 
   (reset! atom n)
   (interrupt-sleep alarm))
-
-
-(defn set-cycle-rate [n]
-  (reset! *tab-cycle-delay* n)
-
-  (interrupt-sleep *tab-cycle-alarm*))
 
 
 (defn parse-time [time timefmt]
@@ -230,7 +222,8 @@
 
 (defn action-listener [fn]
   (proxy [ActionListener] []
-    (actionPerformed [e] (fn e))))
+    (actionPerformed [e] (try (fn e)
+                          (catch Exception _)))))
 
 
 (defn menu-item [label f]
@@ -360,65 +353,89 @@
   (dump-state (File. (System/getenv "HOME") ".graphit.state")))
 
 
-(defn run-plotter []
-  (SwingUtilities/invokeLater
-   (fn []
-     (doto (:refresh *window*)
-       (.addActionListener (action-listener
-                            #(try (set-rate
+(defn separator []
+  (doto (JPanel.)
+    (.add (Box/createHorizontalStrut 5))
+    (.add (doto (JSeparator. SwingConstants/VERTICAL)
+            (.setPreferredSize (Dimension. 1 10))))
+    (.add (Box/createHorizontalStrut 5))))
+
+
+(defn make-control-panel []
+  (doto (JPanel.)
+    ;; Redraw rate adjustment
+    (.add (JLabel. "Redraw rate:"))
+    (.add (doto (JTextField.)
+
+            (.addActionListener (action-listener
+                                 #(set-rate
                                    *redraw-delay-ms*
                                    (Integer. (.getActionCommand %))
-                                   *plot-alarm*)
-                                  (catch Exception _))))
-       (.setColumns 6)
-       (.setText (str @*redraw-delay-ms*)))
+                                   *plot-alarm*)))
+            (.setColumns 6)
+            (.setText (str @*redraw-delay-ms*))))
+    (.add (JLabel. "ms"))
 
-     (doto (:status *window*)
-       (.setPreferredSize (Dimension. 15 33))
-       (.setBorder (BorderFactory/createEmptyBorder 5 5 5 5))
-       (.setLayout (BorderLayout.))
-       (.add (doto (JPanel.)
-               (.setLayout (doto (FlowLayout.)
-                             (.setAlignment FlowLayout/LEFT)))
-               (.add (JLabel. "Redraw rate:"))
-               (.add (:refresh *window*))
-               (.add (doto (JLabel. "ms")
-                       (.setBorder (BorderFactory/createEmptyBorder 0 0 0 40))))
+    (.add (separator))
 
-               (.add (doto (JCheckBox.)
-                       (.addItemListener
-                        (item-listener
-                         #(try
-                           (reset! *tab-cycle-active*
-                                  (= (.getStateChange %) ItemEvent/SELECTED))
-                           (catch Exception _))))))
-               (.add (JLabel. "Cycle tabs every "))
-               (.add (doto (JTextField. nil (str @*tab-cycle-delay*) 3)
-                       (.addActionListener
-                        (action-listener
-                         #(try
-                           (set-rate *tab-cycle-delay*
-                                     (Integer. (.getActionCommand %))
-                                     *tab-cycle-alarm*)
-                           (catch Exception _))))))
-               (.add (JLabel. " secs")))
-             BorderLayout/WEST)
-       (.add (doto (JButton. "Dump points")
-               (.addActionListener (action-listener
-                                    (fn [_]
-                                      (try (save-state)
-                                           (catch Exception _))))))
-             BorderLayout/EAST))
+    ;; Tab cycling adjustment
+    (.add (doto (JCheckBox.)
+            (.addItemListener
+             (item-listener
+              #(try
+                (reset! *tab-cycle-active*
+                        (= (.getStateChange %) ItemEvent/SELECTED))
+                (catch Exception _))))))
+    (.add (JLabel. "Cycle tabs every "))
+    (.add (doto (JTextField. nil (str @*tab-cycle-delay*) 3)
+            (.addActionListener
+             (action-listener
+              #(set-rate *tab-cycle-delay*
+                         (Integer. (.getActionCommand %))
+                         *tab-cycle-alarm*)))))
+    (.add (JLabel. " secs"))
 
+    (.add (separator))
+
+    ;; Graphs per page
+    (.add (JLabel. "Show "))
+    (.add (doto (JTextField. nil (str @*graphs-per-page*) 3)
+            (.addActionListener
+             (action-listener
+              #(do
+                 (reset! *graphs-per-page*
+                         (Integer. (.getActionCommand %)))
+                 (tabpane/rebalance (:panel *window*)))))))
+    (.add (JLabel. " graphs/page"))
+    (.setLayout (doto (FlowLayout.)
+                  (.setAlignment FlowLayout/LEFT)))))
+
+
+(defn make-status-bar []
+  (doto (JPanel.)
+    (.setPreferredSize (Dimension. 15 33))
+    (.setBorder (BorderFactory/createEmptyBorder 5 5 5 5))
+    (.setLayout (BorderLayout.))
+    (.add (make-control-panel) BorderLayout/WEST)
+    (.add (doto (JButton. "Dump points")
+            (.addActionListener (action-listener
+                                 (fn [_]
+                                   (try (save-state)
+                                        (catch Exception _))))))
+          BorderLayout/EAST)))
+
+
+(defn run-ui []
+  (SwingUtilities/invokeLater
+   (fn []
      (.setLayout (.getContentPane (:frame *window*))
                  (BorderLayout.))
-
      (doto (:frame *window*)
        (.addWindowListener
         (proxy [WindowAdapter] []
           (windowClosed [e] (save-state))))
        (.setDefaultCloseOperation JFrame/EXIT_ON_CLOSE)
-       (.add (:status *window*) BorderLayout/NORTH)
+       (.add (make-status-bar) BorderLayout/NORTH)
        (.add (tabpane/get-panel (:panel *window*)))
        (.setSize (Dimension. 1280 1024))
        (.setVisible true)))))
@@ -453,4 +470,4 @@
        (when @*tab-cycle-active*
          (tabpane/cycle-tab (:panel *window*)))
        (interruptible-sleep (* @*tab-cycle-delay* 1000) *tab-cycle-alarm*)))
-    (run-plotter)))
+    (run-ui)))
