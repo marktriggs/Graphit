@@ -15,7 +15,7 @@
 
 
 (defn child-count [tabpane]
-  (.countComponents (:panel tabpane)))
+  (count @(:subpanels tabpane)))
 
 
 (defn rebalance [tabpane]
@@ -28,28 +28,32 @@
                     (.setLayout
                      (BoxLayout. container BoxLayout/PAGE_AXIS)))
 
-            (doseq [p panels]
+            (doseq [[p name] panels]
               (.add container p))
 
             (.add (get-panel tabpane)
                   tab
                   container)))
         (range 1 (inc (count @(:subpanels tabpane))))
-        (partition-all @(:page-size tabpane) @(:subpanels tabpane))))
+        (partition-all @(:page-size tabpane)
+                       (sort-by second @(:subpanels tabpane)))))
   (.revalidate (get-panel tabpane)))
 
 
-(defn add-panel [tabpane panel]
+(defn add-panel [tabpane panel name]
   (SwingUtilities/invokeLater
    (fn []
-     (swap! (:subpanels tabpane) conj panel)
+     (swap! (:subpanels tabpane) conj [panel name])
      (rebalance tabpane))))
 
 
 (defn remove-panel [tabpane panel]
   (SwingUtilities/invokeLater
    (fn []
-     (swap! (:subpanels tabpane) disj panel)
+     (swap! (:subpanels tabpane)
+            (fn [subpanels]
+              (remove #(= (first %) panel)
+                      subpanels)))
      (rebalance tabpane))))
 
 

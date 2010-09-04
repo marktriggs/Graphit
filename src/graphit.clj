@@ -181,7 +181,7 @@
 (defn show-graph [graphname]
   (hide-graph graphname true)
   (let [chart (:chart (@*graphs* graphname))]
-    (tabpane/add-panel (:panel *window*) chart)))
+    (tabpane/add-panel (:panel *window*) chart graphname)))
 
 
 (defn show-all-graphs []
@@ -263,7 +263,7 @@
         (when-not (@*graphs* graph)
           (let [dataset (XYSeriesCollection.)
                 chart (make-chart graph "" dataset)]
-            (tabpane/add-panel (:panel *window*) chart)
+            (tabpane/add-panel (:panel *window*) chart graph)
             (swap! *graphs* assoc graph
                    {:chart chart
                     :dataset dataset
