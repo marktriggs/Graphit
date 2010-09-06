@@ -329,12 +329,20 @@
   (print-exceptions
    (with-open [#^BufferedReader in (reader (.getInputStream client))
                #^PrintWriter out (writer (.getOutputStream client))]
-     (doseq [s (take-while #(not= % "done") (line-seq in))]
-       (if (= s "help")
-         (do (.println out "Syntax: graph name:[xval]:line name:(yval|\"delete\")")
-             (.println out "Exit with 'done'")
-             (.flush out))
-         (add-datapoint (parse-datapoint s))))))
+     (loop [s (.readLine in)]
+       (when (and s (not (#{"done" "end"} s)))
+         (cond (= s "help")
+               (do (.println out "Syntax: graph name:[xval]:line name:(yval|\"delete\")")
+                   (.println out "Exit with 'done'")
+                   (.flush out))
+
+               (= s "cycle")
+               (if @*tab-cycle-active*
+                 (interrupt-sleep *tab-cycle-alarm*)
+                 (tabpane/cycle-tab (:panel *window*)))
+
+               :else (add-datapoint (parse-datapoint s)))
+         (recur (.readLine in))))))
   (.close client))
 
 
