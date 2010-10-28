@@ -70,7 +70,7 @@ or this one:
 
 or if you want to do times:
 
-  name of graph[tab]time string[tab]name of line[tab]y value[tab]SimleDateFormat string
+  name of graph[tab]time string[tab]name of line[tab]y value[tab]SimpleDateFormat string
 
 
 JFreeChart gives some niceties for free: you can drag a rectangle to
