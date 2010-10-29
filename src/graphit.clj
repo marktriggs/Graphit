@@ -81,16 +81,20 @@
 
 
 (defn parse-datapoint [#^String s]
-  (let [[graph & bits] (.split s "\t")
-        [time label num timefmt] (if (= (count bits) 2)
-                                   (concat [(System/currentTimeMillis)] bits)
-                                   bits)]
-    {:graph graph
-     :time (parse-time time timefmt)
-     :line label
-     :value (if (= num "delete")
-              num
-              (.parse (NumberFormat/getInstance) num))}))
+  (try
+   (let [[graph & bits] (.split s "\t")
+         [time label num timefmt] (if (= (count bits) 2)
+                                    (concat [(System/currentTimeMillis)] bits)
+                                    bits)]
+     {:graph graph
+      :time (parse-time time timefmt)
+      :line label
+      :value (if (= num "delete")
+               num
+               (.parse (NumberFormat/getInstance) num))})
+   (catch Exception e
+     (.println System/err (format "Failed to parse line: '%s'" s))
+     (throw e))))
 
 
 (defn add-datapoint [point]
@@ -332,12 +336,13 @@
                #^PrintWriter out (writer (.getOutputStream client))]
      (loop []
        (let [line (.readLine in)]
-         (when (not= line "done")
-           (if (= line "help")
-             (do (.println out "Syntax: graph name:[xval]:line name:(yval|\"delete\")")
-                 (.println out "Exit with 'done'")
-                 (.flush out))
-             (add-datapoint (parse-datapoint line)))
+         (when (and line (not= line "done"))
+           (cond (= line "help")
+                 (do (.println out "Syntax: graph name:[xval]:line name:(yval|\"delete\")")
+                     (.println out "Exit with 'done'")
+                     (.flush out))
+                 (= line "") nil
+                 :else (add-datapoint (parse-datapoint line)))
            (recur))))))
   (.close client))
 
