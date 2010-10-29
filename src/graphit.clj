@@ -330,12 +330,15 @@
   (print-exceptions
    (with-open [#^BufferedReader in (reader (.getInputStream client))
                #^PrintWriter out (writer (.getOutputStream client))]
-     (doseq [s (take-while #(not= % "done") (line-seq in))]
-       (if (= s "help")
-         (do (.println out "Syntax: graph name:[xval]:line name:(yval|\"delete\")")
-             (.println out "Exit with 'done'")
-             (.flush out))
-         (add-datapoint (parse-datapoint s))))))
+     (loop []
+       (let [line (.readLine in)]
+         (when (not= line "done")
+           (if (= line "help")
+             (do (.println out "Syntax: graph name:[xval]:line name:(yval|\"delete\")")
+                 (.println out "Exit with 'done'")
+                 (.flush out))
+             (add-datapoint (parse-datapoint line)))
+           (recur))))))
   (.close client))
 
 
