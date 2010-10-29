@@ -345,12 +345,16 @@
 (defn handle-inputs
   "Open a socket and read lines of input."
   [port]
-  (with-open [server (ServerSocket. port)]
-    (println "Listening on" port)
-    (while true
-      (print-exceptions
-       (let [client (.accept server)]
-         (future (handle-client client)))))))
+  (try
+   (with-open [server (ServerSocket. port)]
+     (println "Listening on" port)
+     (while true
+            (print-exceptions
+             (let [client (.accept server)]
+               (future (handle-client client))))))
+   (catch Exception e
+     (.printStackTrace e)
+     (System/exit 1))))
 
 
 (defn save-state []
