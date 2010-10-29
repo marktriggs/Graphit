@@ -46,7 +46,9 @@
 
 (defn interruptible-sleep [ms alarm]
   (locking alarm
-    (.wait alarm ms)))
+    (if (> ms 0)
+      (.wait alarm ms)
+      (.wait alarm))))
 
 (defn interrupt-sleep [alarm]
   (locking alarm
