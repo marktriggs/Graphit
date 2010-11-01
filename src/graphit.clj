@@ -341,6 +341,10 @@
                  (do (.println out "Syntax: graph name:[xval]:line name:(yval|\"delete\")")
                      (.println out "Exit with 'done'")
                      (.flush out))
+
+                 (= line "cycle")
+                 (interrupt-sleep *tab-cycle-alarm*)
+
                  (= line "") nil
                  :else (add-datapoint (parse-datapoint line)))
            (recur))))))
