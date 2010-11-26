@@ -466,7 +466,7 @@
           BorderLayout/EAST)))
 
 
-(defn run-ui []
+(defn run-ui [geometry]
   (SwingUtilities/invokeLater
    (fn []
      (.setLayout (.getContentPane (:frame *window*))
@@ -478,7 +478,7 @@
        (.setDefaultCloseOperation JFrame/EXIT_ON_CLOSE)
        (.add (make-status-bar) BorderLayout/NORTH)
        (.add (tabpane/get-panel (:panel *window*)))
-       (.setSize (Dimension. 1280 1024))
+       (.setSize geometry)
        (.setVisible true)))))
 
 
@@ -505,6 +505,15 @@
      (System/exit 1))))
 
 
+
+(defn parse-geometry [s]
+  (try
+   (let [[w h] (map #(Integer/valueOf %) (.split s "[xX]"))]
+     (Dimension. w h))
+   (catch Exception _
+     (Dimension. 1280 1024))))
+
+
 (defn -main [& args]
   (with-command-line args
     "A handy graphing thingy"
@@ -516,7 +525,8 @@
      [graphs-per-page "Number of graphs per tabbed page" "4"]
      [port "Listen port" "6666"]
      [datastream-port "Data stream port" nil]
-     [redraw "Redraw ms" "2000"]]
+     [redraw "Redraw ms" "2000"]
+     [geometry "Window dimensions (wxh)" "1280x1024"]]
 
     (.addShutdownHook (Runtime/getRuntime)
                       (Thread. #(save-state)))
@@ -538,4 +548,4 @@
        (when @*tab-cycle-active*
          (tabpane/cycle-tab (:panel *window*)))
        (interruptible-sleep (* @*tab-cycle-delay* 1000) *tab-cycle-alarm*)))
-    (run-ui)))
+    (run-ui (parse-geometry geometry))))
