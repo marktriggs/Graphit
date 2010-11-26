@@ -11,9 +11,11 @@
            (javax.swing JFrame JPanel JTextField BoxLayout Box
                         JLabel JMenuItem JOptionPane JButton SwingUtilities
                         SwingConstants JCheckBox BorderFactory JSeparator)
-           (java.net ServerSocket Socket)
+           (java.net ServerSocket Socket InetSocketAddress)
            (java.awt.event ActionListener ItemListener ItemEvent WindowAdapter)
-           (java.awt BasicStroke Dimension Color BorderLayout FlowLayout))
+           (java.awt BasicStroke Dimension Color BorderLayout FlowLayout)
+           (java.nio ByteBuffer)
+           (java.nio.channels Selector ServerSocketChannel SelectionKey))
   (:use clojure.contrib.str-utils
         clojure.contrib.duck-streams
         clojure.contrib.command-line)
@@ -104,20 +106,18 @@
   (send *data-gatherer* conj point)
   (send-off *datastream-listeners*
             (fn [listeners]
-              (clojure.set/difference
-               listeners
-               (set (for [client listeners
-                          :let [result
-                                (try
-                                 (let [out (.getOutputStream client)]
-                                   (.write out (.getBytes
-                                                (str (:source point) "\n")))
-                                   (.flush out)
-                                   nil)
-                                 (catch Exception e
-                                   client))]
-                          :when result]
-                      result))))))
+              (reduce (fn [alive-listeners listener]
+                        (try
+                         (let [msg (ByteBuffer/wrap
+                                    (.getBytes (str (:source point) "\n")))]
+                           (if (= (.write listener msg)
+                                  (.limit msg))
+                             (conj alive-listeners listener)
+                             alive-listeners))
+                         (catch Exception e
+                           alive-listeners)))
+                      #{}
+                      listeners))))
 
 
 (defmacro print-exceptions [& body]
@@ -479,10 +479,22 @@
 
 (defn datastream-handler [port]
   (try
-   (with-open [server (ServerSocket. port)]
+   (let [ssc (ServerSocketChannel/open)
+         selector (Selector/open)]
+     (doto ssc
+       (.. socket (bind (InetSocketAddress. port)))
+       (.configureBlocking false)
+       (.register selector SelectionKey/OP_ACCEPT))
+
      (while true
-            (print-exceptions
-             (send-off *datastream-listeners* conj (.accept server)))))
+       (.select selector)
+
+       (let [keyset (.. selector selectedKeys iterator)]
+         (doseq [key (iterator-seq keyset)]
+           (.remove keyset)
+           (let [client (.accept ssc)]
+             (.configureBlocking client false)
+             (send-off *datastream-listeners* conj client))))))
    (catch Exception e
      (.printStackTrace e)
      (System/exit 1))))
