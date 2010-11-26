@@ -36,6 +36,8 @@
 (def *graphs* (atom {}))
 (def *hide-legend* (atom nil))
 
+(def *datastream-listeners* (agent #{}))
+
 
 ;; Objects used for interruptible sleeps
 (def *plot-alarm* (Object.))
@@ -89,6 +91,7 @@
      {:graph graph
       :time (parse-time time timefmt)
       :line label
+      :source s
       :value (if (= num "delete")
                num
                (.parse (NumberFormat/getInstance) num))})
@@ -98,7 +101,23 @@
 
 
 (defn add-datapoint [point]
-  (send *data-gatherer* conj point))
+  (send *data-gatherer* conj point)
+  (send-off *datastream-listeners*
+            (fn [listeners]
+              (clojure.set/difference
+               listeners
+               (set (for [client listeners
+                          :let [result
+                                (try
+                                 (let [out (.getOutputStream client)]
+                                   (.write out (.getBytes
+                                                (str (:source point) "\n")))
+                                   (.flush out)
+                                   nil)
+                                 (catch Exception e
+                                   client))]
+                          :when result]
+                      result))))))
 
 
 (defmacro print-exceptions [& body]
@@ -458,6 +477,17 @@
        (.setVisible true)))))
 
 
+(defn datastream-handler [port]
+  (try
+   (with-open [server (ServerSocket. port)]
+     (while true
+            (print-exceptions
+             (send-off *datastream-listeners* conj (.accept server)))))
+   (catch Exception e
+     (.printStackTrace e)
+     (System/exit 1))))
+
+
 (defn -main [& args]
   (with-command-line args
     "A handy graphing thingy"
@@ -468,6 +498,7 @@
      [hide-legend "Don't display the graph's legend"]
      [graphs-per-page "Number of graphs per tabbed page" "4"]
      [port "Listen port" "6666"]
+     [datastream-port "Data stream port" nil]
      [redraw "Redraw ms" "2000"]]
 
     (.addShutdownHook (Runtime/getRuntime)
@@ -479,7 +510,10 @@
     (reset! *max-readings* (Integer. max-to-keep))
     (reset! *hide-legend* hide-legend)
     (reset! *graphs-per-page* (Integer. graphs-per-page))
-    (future (handle-inputs (Integer. port)))
+    (future (handle-inputs (Integer/valueOf port)))
+
+    (when datastream-port
+      (future (datastream-handler (Integer/valueOf datastream-port))))
 
     (send-off *data-gatherer* do-plot)
     (future
