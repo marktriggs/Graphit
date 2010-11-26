@@ -200,6 +200,7 @@
         (.setNumberFormatOverride *number-formatter*)))
 
     (doto (ChartPanel. linechart)
+      (.setMaximumDrawWidth 2560)
       (.setInitialDelay 50)
       (.setMouseWheelEnabled true))))
 
