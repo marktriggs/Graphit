@@ -349,6 +349,10 @@
   [])
 
 
+(defn save-state []
+  (dump-state (File. (System/getenv "HOME") ".graphit.state")))
+
+
 (defn handle-client [#^Socket client]
   (print-exceptions
    (with-open [#^BufferedReader in (reader (.getInputStream client))
@@ -363,6 +367,9 @@
 
                  (= line "cycle")
                  (interrupt-sleep *tab-cycle-alarm*)
+
+                 (= line "dump")
+                 (save-state)
 
                  (= line "") nil
                  :else (add-datapoint (parse-datapoint line)))
@@ -385,8 +392,6 @@
      (System/exit 1))))
 
 
-(defn save-state []
-  (dump-state (File. (System/getenv "HOME") ".graphit.state")))
 
 
 (defn separator []
