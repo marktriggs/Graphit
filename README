@@ -4,6 +4,10 @@ Background
 Graphit is a tool that reads time-based numeric data over a network
 socket and plots it in near real-time.
 
+Here's a screenshot:
+
+  http://github.com/marktriggs/Graphit/blob/master/screenshot.png
+
 I'm in the unfortunate position of being a systems administrator by day,
 and that means keeping an eye on lots of different things--load
 averages, number of Apache processes, number of threads for certain
