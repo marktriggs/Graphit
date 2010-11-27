@@ -201,6 +201,7 @@
 
     (doto (ChartPanel. linechart)
       (.setMaximumDrawWidth 2560)
+      (.setMaximumDrawHeight 1600)
       (.setInitialDelay 50)
       (.setMouseWheelEnabled true))))
 
