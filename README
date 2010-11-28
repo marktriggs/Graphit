@@ -8,12 +8,12 @@ Here's a screenshot:
 
   http://github.com/marktriggs/Graphit/blob/master/screenshot.png
 
-I'm in the unfortunate position of being a systems administrator by day,
-and that means keeping an eye on lots of different things--load
+I'm in the unfortunate position of being a systems administrator by
+day, and that means keeping an eye on lots of different things--load
 averages, number of Apache processes, number of threads for certain
 applications, things like that.  Tools like RRDTool do a great job of
 gathering and plotting data, but they're not really designed for
-real-time visualisation.  I wanted something I could stare at the
+real-time visualisation.  I wanted something I could stare at in the
 quieter moments.
 
 Graphit uses the wonderful JFreeChart (http://www.jfree.org/jfreechart/)
