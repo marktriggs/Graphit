@@ -130,6 +130,12 @@
 (defn make-number-formatter [fmt]
   (proxy [DecimalFormat] []
     (format [a b c]
+      (.append b (format fmt a)))))
+
+
+(defn make-time-formatter [fmt]
+  (proxy [DecimalFormat] []
+    (format [a b c]
       (let [formatter (SimpleDateFormat. fmt)
             ;; Any number bigger than the number of milliseconds since
             ;; 1990-01-01 is interpreted as a time stamp.
@@ -176,8 +182,10 @@
                                                   dataset
                                                   PlotOrientation/VERTICAL
                                                   true true false)
-        number-formatter (make-number-formatter (or (get opts "time-format")
-                                                    "yyyy-MM-dd HH:mm:ss"))]
+        number-formatter (if (get opts "format-string")
+                           (make-number-formatter (get opts "format-string"))
+                           (make-time-formatter (or (get opts "time-format")
+                                                    "yyyy-MM-dd HH:mm:ss")))]
     (when @*hide-legend*
       (.setVisible (.getLegend linechart)
                    false))
