@@ -122,15 +122,21 @@
 
 (defmacro print-exceptions [& body]
   `(try ~@body
-        (catch Exception e# (.printStackTrace e#))))
+        (catch Exception e#
+          (.printStackTrace e#)
+          (.printStackTrace (.getCause e#)))))
 
 
-(def *number-formatter* (proxy [DecimalFormat] []
-                          (format [a b c]
-                            (let [formatter (SimpleDateFormat. "yyyy-MM-dd HH:mm:ss")]
-                              (if (>= a (.getTime (.parse formatter "1990-1-1 00:00:00")))
-                                (.append b (.format formatter (Date. (long a))))
-                                (proxy-super format a b c))))))
+(defn make-number-formatter [fmt]
+  (proxy [DecimalFormat] []
+    (format [a b c]
+      (let [formatter (SimpleDateFormat. fmt)
+            ;; Any number bigger than the number of milliseconds since
+            ;; 1990-01-01 is interpreted as a time stamp.
+            time-indicator 631112400000]
+        (if (>= a time-indicator)
+          (.append b (.format formatter (Date. (long a))))
+          (proxy-super format a b c))))))
 
 
 (defn dump-dataset [wrtr dataset graph-name]
@@ -153,23 +159,25 @@
     (.flush fh)))
 
 
-(def *tooltip-generator*
-     (proxy [XYToolTipGenerator] []
-       (generateToolTip [dataset series item]
-         (format "%s, %s, %s"
-                 (.getSeriesKey dataset series)
-                 (.format *number-formatter*
-                          (.getXValue dataset series item))
-                 (String/valueOf (.getYValue dataset series item))))))
+(defn make-tooltip-generator [number-formatter]
+  (proxy [XYToolTipGenerator] []
+    (generateToolTip [dataset series item]
+      (format "%s, %s, %s"
+              (.getSeriesKey dataset series)
+              (.format number-formatter
+                       (.getXValue dataset series item))
+              (String/valueOf (.getYValue dataset series item))))))
 
 
-(defn make-chart [title y-axis dataset]
+(defn make-chart [title y-axis dataset & [opts]]
   (let [linechart (ChartFactory/createXYLineChart title
                                                   ""
                                                   y-axis
                                                   dataset
                                                   PlotOrientation/VERTICAL
-                                                  true true false)]
+                                                  true true false)
+        number-formatter (make-number-formatter (or (get opts "time-format")
+                                                    "yyyy-MM-dd HH:mm:ss"))]
     (when @*hide-legend*
       (.setVisible (.getLegend linechart)
                    false))
@@ -185,7 +193,7 @@
         (.setBackgroundPaint (Color. 239 239 239)))
 
       (doto (.getRenderer xyplot)
-        (.setBaseToolTipGenerator *tooltip-generator*)
+        (.setBaseToolTipGenerator (make-tooltip-generator number-formatter))
         (.setStroke (BasicStroke. 2.0))
         (.setBaseShapesVisible true)
         (.setBaseShapesFilled true)
@@ -197,7 +205,7 @@
         (.setStandardTickUnits (NumberAxis/createIntegerTickUnits)))
 
       (doto (.getDomainAxis xyplot)
-        (.setNumberFormatOverride *number-formatter*)))
+        (.setNumberFormatOverride number-formatter)))
 
     (doto (ChartPanel. linechart)
       (.setMaximumDrawWidth 2560)
@@ -297,6 +305,17 @@
            dissoc label)))
 
 
+(defn add-empty-chart [{:keys [title options]}]
+  (let [dataset (XYSeriesCollection.)
+        chart (make-chart title "" dataset options)]
+    (tabpane/add-panel (:panel *window*) chart title)
+    (swap! *graphs* assoc title
+           {:chart chart
+            :dataset dataset
+            :lines {}})
+    (instrument-popup-menu title)))
+
+
 (defn do-plot [values]
   (SwingUtilities/invokeLater
    (fn []
@@ -305,14 +324,7 @@
       (doseq [{:keys [graph time line value]} values]
 
         (when-not (@*graphs* graph)
-          (let [dataset (XYSeriesCollection.)
-                chart (make-chart graph "" dataset)]
-            (tabpane/add-panel (:panel *window*) chart graph)
-            (swap! *graphs* assoc graph
-                   {:chart chart
-                    :dataset dataset
-                    :lines {}})
-            (instrument-popup-menu graph)))
+          (add-empty-chart {:title graph :options {}}))
 
         (when-not (get-in @*graphs* [graph :lines line])
           (let [new-line (doto (XYSeries. line)
@@ -344,7 +356,8 @@
             (delete-line graph-name label))))
 
       (doseq [graph (vals @*graphs*)]
-        (.fireSeriesChanged (first (-> graph :lines vals))))
+        (when-let [series (first (-> graph :lines vals))]
+          (.fireSeriesChanged series)))
 
       (send-off *data-gatherer* do-plot))))
   (interruptible-sleep @*redraw-delay-ms* *plot-alarm*)
@@ -353,6 +366,13 @@
 
 (defn save-state []
   (dump-state (File. (System/getenv "HOME") ".graphit.state")))
+
+
+(defn parse-create-cmd [s]
+  (let [[_ title & opts] (.split s "\t")
+        opts (apply hash-map opts)]
+    {:title title
+     :options opts}))
 
 
 (defn handle-client [#^Socket client]
@@ -372,6 +392,9 @@
 
                  (= line "dump")
                  (save-state)
+
+                 (.startsWith line "create")
+                 (add-empty-chart (parse-create-cmd line))
 
                  (= line "") nil
                  :else (add-datapoint (parse-datapoint line)))
