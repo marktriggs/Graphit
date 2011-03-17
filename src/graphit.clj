@@ -182,10 +182,10 @@
                                                   dataset
                                                   PlotOrientation/VERTICAL
                                                   true true false)
-        number-formatter (if (get opts "format-string")
-                           (make-number-formatter (get opts "format-string"))
-                           (make-time-formatter (or (get opts "time-format")
-                                                    "yyyy-MM-dd HH:mm:ss")))]
+        formatter (if (get opts "format-string")
+                    (make-number-formatter (get opts "format-string"))
+                    (make-time-formatter (or (get opts "time-format")
+                                             "yyyy-MM-dd HH:mm:ss")))]
     (when @*hide-legend*
       (.setVisible (.getLegend linechart)
                    false))
@@ -201,7 +201,7 @@
         (.setBackgroundPaint (Color. 239 239 239)))
 
       (doto (.getRenderer xyplot)
-        (.setBaseToolTipGenerator (make-tooltip-generator number-formatter))
+        (.setBaseToolTipGenerator (make-tooltip-generator formatter))
         (.setStroke (BasicStroke. 2.0))
         (.setBaseShapesVisible true)
         (.setBaseShapesFilled true)
@@ -213,7 +213,7 @@
         (.setStandardTickUnits (NumberAxis/createIntegerTickUnits)))
 
       (doto (.getDomainAxis xyplot)
-        (.setNumberFormatOverride number-formatter)))
+        (.setNumberFormatOverride formatter)))
 
     (doto (ChartPanel. linechart)
       (.setMaximumDrawWidth 2560)
