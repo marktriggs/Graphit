@@ -216,8 +216,8 @@
         (.setNumberFormatOverride formatter)))
 
     (doto (ChartPanel. linechart)
-      (.setMaximumDrawWidth 2560)
-      (.setMaximumDrawHeight 1600)
+      (.setMaximumDrawWidth Integer/MAX_VALUE)
+      (.setMaximumDrawHeight Integer/MAX_VALUE)
       (.setInitialDelay 50)
       (.setMouseWheelEnabled true))))
 
