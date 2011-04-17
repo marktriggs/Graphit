@@ -175,13 +175,21 @@
               (String/valueOf (.getYValue dataset series item))))))
 
 
-(defn make-chart [title y-axis dataset & [opts]]
-  (let [linechart (ChartFactory/createXYLineChart title
-                                                  ""
-                                                  y-axis
-                                                  dataset
-                                                  PlotOrientation/VERTICAL
-                                                  true true false)
+(defn make-chart [title dataset & [opts]]
+  (let [y-axis (or (get opts "y-label") "")
+        linechart (if (get opts "scatter")
+                    (ChartFactory/createScatterPlot title
+                                                    ""
+                                                    y-axis
+                                                    dataset
+                                                    PlotOrientation/VERTICAL
+                                                    true true false)
+                    (ChartFactory/createXYLineChart title
+                                                    ""
+                                                    y-axis
+                                                    dataset
+                                                    PlotOrientation/VERTICAL
+                                                    true true false))
         formatter (if (get opts "format-string")
                     (make-number-formatter (get opts "format-string"))
                     (make-time-formatter (or (get opts "time-format")
@@ -315,7 +323,7 @@
 
 (defn add-empty-chart [{:keys [title options]}]
   (let [dataset (XYSeriesCollection.)
-        chart (make-chart title "" dataset options)]
+        chart (make-chart title dataset options)]
     (tabpane/add-panel (:panel *window*) chart title)
     (swap! *graphs* assoc title
            {:chart chart
@@ -402,7 +410,9 @@
                  (save-state)
 
                  (.startsWith line "create")
-                 (add-empty-chart (parse-create-cmd line))
+                 (let [cmd (parse-create-cmd line)]
+                   (when-not (@*graphs* (:title cmd))
+                     (add-empty-chart cmd)))
 
                  (= line "") nil
                  :else (add-datapoint (parse-datapoint line)))
